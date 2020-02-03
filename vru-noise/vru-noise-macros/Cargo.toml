@@ -1,0 +1,17 @@
+[package]
+name = "vru-noise-macros"
+version = "1.0.0"
+authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "Macroses for vru-noise"
+repository = "https://github.com/vlad9486/vru"
+
+[lib]
+name = "vru_noise_macros"
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0" }

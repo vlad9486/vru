@@ -1,0 +1,11 @@
+[package]
+name = "vru-transport"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+repository = "https://github.com/vlad9486/vru"
+
+[dependencies]
+vru-noise = { path = "../vru-noise" }
+vru-sphinx = { path = "../vru-sphinx" }

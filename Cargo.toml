@@ -1,0 +1,2 @@
+[workspace]
+members = ["rac", "vru-noise", "vru-noise/vru-noise-macros", "vru-sphinx", "vru-transport"]

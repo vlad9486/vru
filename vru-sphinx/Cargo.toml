@@ -1,0 +1,59 @@
+[package]
+name = "vru-sphinx"
+version = "1.0.0"
+authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+description = "Sphinx mix network packet processor implemented in Rust"
+repository = "https://github.com/vlad9486/vru"
+
+[dependencies.rac]
+version = "1.0"
+features = ["secp256k1"]
+
+[dependencies.digest]
+version = "0.8"
+
+[dependencies.crypto-mac]
+version = "0.7"
+
+[dependencies.keystream]
+version = "1.0"
+
+[dependencies.generic-array]
+version = "0.12"
+features = ["serde"]
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+optional = true
+
+[dependencies.either]
+version = "1.5"
+
+[dev-dependencies.rand]
+version = "0.6"
+
+[dev-dependencies.secp256k1]
+version = "0.17"
+features = ["rand"]
+
+[dev-dependencies.hmac]
+version = "0.7"
+
+[dev-dependencies.sha2]
+version = "0.8"
+
+[dev-dependencies.chacha]
+version = "0.3"
+
+[dev-dependencies.tirse]
+version = "0.6"
+features = ["use_std"]
+
+[dev-dependencies.hex]
+version = "0.4"
+
+[features]
+serde-support = ["serde"]
