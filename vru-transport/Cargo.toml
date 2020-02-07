@@ -7,5 +7,5 @@ license = "Apache-2.0"
 repository = "https://github.com/vlad9486/vru"
 
 [dependencies]
-vru-noise = { path = "../vru-noise" }
-vru-sphinx = { path = "../vru-sphinx" }
+vru-noise = { version = "1.0" }
+vru-sphinx = { version = "1.0" }
