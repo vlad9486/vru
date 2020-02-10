@@ -67,7 +67,7 @@ impl PatternDescriptor {
         ) -> Result<TokenStream, &'static str> {
             let e = context.and_then(|c| {
                 let modifier = |state: &mut PartyState| {
-                    if let "s" | "S" = token { 
+                    if let "s" | "S" = token {
                         if state.has_static {
                             Some("the party already has the static key")
                         } else {
@@ -141,7 +141,8 @@ impl PatternDescriptor {
                     context = Some(inner);
                     stream
                 },
-            }.unwrap_or_else(|description| {
+            }
+            .unwrap_or_else(|description| {
                 let position = code.as_ptr() as usize - original_code_value.as_ptr() as usize;
                 panic!(
                     "\"{}\" in pattern: \"{}\", at: ...{}",
