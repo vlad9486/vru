@@ -60,6 +60,7 @@ impl Curve for PublicKey {
     const NAME: &'static str = "secp256k1";
 
     fn base() -> Self {
+        #[rustfmt::skip]
         let buffer = [
             0x04,
             0x79, 0xBE, 0x66, 0x7E, 0xF9, 0xDC, 0xBB, 0xAC,
