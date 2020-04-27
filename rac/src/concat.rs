@@ -56,8 +56,8 @@ where
         let v_array = self.1.clone_line();
 
         let mut r = GenericArray::default();
-        r.as_mut()[0..u_length].clone_from_slice(u_array.as_ref());
-        r.as_mut()[u_length..(v_length + u_length)].clone_from_slice(v_array.as_ref());
+        r[0..u_length].clone_from_slice(u_array.as_ref());
+        r[u_length..(v_length + u_length)].clone_from_slice(v_array.as_ref());
 
         r
     }

@@ -1,6 +1,6 @@
 [package]
 name = "vru-sphinx"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -33,7 +33,7 @@ optional = true
 version = "1.5"
 
 [dev-dependencies.rand]
-version = "0.6"
+version = "0.7"
 
 [dev-dependencies.secp256k1]
 version = "0.17"
