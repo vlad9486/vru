@@ -1,5 +1,5 @@
 use std::iter::Iterator;
-use quote::__rt::TokenStream;
+use quote::__private::TokenStream;
 use syn::parse::{Parse, ParseStream};
 use syn::{Type, LitStr, Error};
 
