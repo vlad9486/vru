@@ -1,8 +1,8 @@
 use generic_array::{GenericArray, ArrayLength};
 use keystream::{KeyStream, SeekableKeyStream};
 use rac::{LineValid, Curve};
-use crypto_mac::Mac;
-use digest::{Input, FixedOutput};
+use crypto_mac::{Mac, NewMac};
+use digest::{Update, FixedOutput};
 
 pub trait PseudoRandomStream<T>
 where
@@ -43,8 +43,8 @@ pub trait Sphinx {
 impl<A, C, D, S> Sphinx for (A, C, D, S)
 where
     A: Curve,
-    C: Mac,
-    D: Default + Input + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
+    C: Mac + NewMac,
+    D: Default + Update + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
     S: PseudoRandomStream<C::OutputSize> + SeekableKeyStream,
 {
     type KeyLength = C::KeySize;
@@ -55,8 +55,8 @@ where
 
     fn mu(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Collector {
         let mut collector = C::new_varkey(b"mu").unwrap();
-        collector.input(shared);
-        let key = collector.result().code();
+        collector.update(shared);
+        let key = collector.finalize().into_bytes();
         C::new_varkey(&key).unwrap()
     }
 
@@ -65,32 +65,32 @@ where
         T: AsRef<[u8]>,
     {
         let mut collector = collector;
-        Mac::input(&mut collector, data.as_ref());
+        collector.update(data.as_ref());
         collector
     }
 
     fn output(collector: Self::Collector) -> GenericArray<u8, Self::MacLength> {
-        Mac::result(collector).code()
+        collector.finalize().into_bytes()
     }
 
     fn rho(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Stream {
         let mut collector = C::new_varkey(b"rho").unwrap();
-        collector.input(shared);
-        let key = collector.result().code();
+        collector.update(shared);
+        let key = collector.finalize().into_bytes();
         S::seed(key)
     }
 
     fn pi(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Stream {
         let mut collector = C::new_varkey(b"um").unwrap();
-        collector.input(shared);
-        let key = collector.result().code();
+        collector.update(shared);
+        let key = collector.finalize().into_bytes();
         S::seed(key)
     }
 
     fn tau(public_key: Self::AsymmetricKey) -> SharedSecret<Self::AsymmetricKey> {
         D::default()
             .chain(public_key.compress().clone_line().as_ref())
-            .fixed_result()
+            .finalize_fixed()
     }
 
     fn blinding(
@@ -100,6 +100,6 @@ where
         D::default()
             .chain(public_key.compress().clone_line().as_ref())
             .chain(shared)
-            .fixed_result()
+            .finalize_fixed()
     }
 }

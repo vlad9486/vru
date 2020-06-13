@@ -4,7 +4,7 @@ use super::sphinx::{Sphinx, SharedSecret};
 use generic_array::{GenericArray, ArrayLength};
 use rac::{LineValid, Curve};
 use keystream::SeekableKeyStream;
-use digest::{Input, FixedOutput};
+use digest::{Update, FixedOutput};
 
 pub struct LocalData<A>
 where
@@ -35,10 +35,10 @@ where
 
     pub fn digest<D>(&self) -> Self
     where
-        D: Default + Input + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
+        D: Default + Update + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
     {
         LocalData {
-            shared_secret: D::default().chain(&self.shared_secret).fixed_result(),
+            shared_secret: D::default().chain(&self.shared_secret).finalize_fixed(),
         }
     }
 }
@@ -98,13 +98,13 @@ where
 
     pub fn digest<D>(&self) -> Self
     where
-        D: Default + Input + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
+        D: Default + Update + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
     {
         let mut shared_secrets_array = self.shared_secrets.clone();
         shared_secrets_array
             .as_mut_slice()
             .iter_mut()
-            .for_each(|x| *x = D::default().chain(x.as_ref()).fixed_result());
+            .for_each(|x| *x = D::default().chain(x.as_ref()).finalize_fixed());
         GlobalData {
             shared_secrets: shared_secrets_array,
         }

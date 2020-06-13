@@ -8,7 +8,7 @@ mod packet {
     use chacha::ChaCha;
     use hmac::Hmac;
     use secp256k1::PublicKey;
-    use digest::{Input, BlockInput, FixedOutput, Reset};
+    use digest::{Update, BlockInput, FixedOutput, Reset};
     use generic_array::{
         GenericArray,
         typenum::{U16, U32},
@@ -38,9 +38,9 @@ mod packet {
 
     pub struct TruncatedSha256(Sha256);
 
-    impl Input for TruncatedSha256 {
-        fn input<B: AsRef<[u8]>>(&mut self, data: B) {
-            self.0.input(data)
+    impl Update for TruncatedSha256 {
+        fn update(&mut self, data: impl AsRef<[u8]>) {
+            self.0.update(data)
         }
     }
 
@@ -51,11 +51,16 @@ mod packet {
     impl FixedOutput for TruncatedSha256 {
         type OutputSize = U16;
 
-        fn fixed_result(self) -> GenericArray<u8, Self::OutputSize> {
-            use generic_array::sequence::GenericSequence;
+        fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
+            let mut full = GenericArray::default();
+            self.0.finalize_into(&mut full);
+            out.clone_from_slice(&full[..16]);
+        }
 
-            let o = self.0.fixed_result();
-            GenericArray::generate(|x| o[x])
+        fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
+            let mut full = GenericArray::default();
+            self.0.finalize_into_reset(&mut full);
+            out.clone_from_slice(&full[..16]);
         }
     }
 
@@ -177,7 +182,7 @@ fn path() {
     use super::{LocalData, GlobalData};
     use generic_array::typenum::{U19, U5};
     use generic_array::sequence::GenericSequence;
-    use secp256k1::Secp256k1;
+    use secp256k1::{Secp256k1, rand};
     use either::{Left, Right};
     use std::fmt;
     use serde::{Serialize, Serializer};
