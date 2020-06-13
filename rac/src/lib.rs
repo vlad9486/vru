@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 #![no_std]
 
+pub extern crate generic_array;
+
 mod line;
 pub use self::line::{LineValid, Line};
 
