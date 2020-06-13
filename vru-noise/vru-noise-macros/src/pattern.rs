@@ -95,20 +95,40 @@ impl PatternDescriptor {
                 return Err(error);
             }
             let appender = match (token, incoming) {
-                ("s", false) => quote![vru_noise::Point<#algorithm, vru_noise::typenum::U1, vru_noise::typenum::B0>],
-                ("s", true) => quote![vru_noise::Point<#algorithm, vru_noise::typenum::U3, vru_noise::typenum::B0>],
+                ("s", false) => {
+                    quote![vru_noise::Point<#algorithm, vru_noise::typenum::U1, vru_noise::typenum::B0>]
+                },
+                ("s", true) => {
+                    quote![vru_noise::Point<#algorithm, vru_noise::typenum::U3, vru_noise::typenum::B0>]
+                },
 
-                ("e", false) => quote![vru_noise::Point<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::B1>],
-                ("e", true) => quote![vru_noise::Point<#algorithm, vru_noise::typenum::U2, vru_noise::typenum::B1>],
+                ("e", false) => {
+                    quote![vru_noise::Point<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::B1>]
+                },
+                ("e", true) => {
+                    quote![vru_noise::Point<#algorithm, vru_noise::typenum::U2, vru_noise::typenum::B1>]
+                },
 
-                ("S", false) => quote![vru_noise::EncryptedPoint<#algorithm, vru_noise::typenum::U1>],
-                ("S", true) => quote![vru_noise::EncryptedPoint<#algorithm, vru_noise::typenum::U3>],
+                ("S", false) => {
+                    quote![vru_noise::EncryptedPoint<#algorithm, vru_noise::typenum::U1>]
+                },
+                ("S", true) => {
+                    quote![vru_noise::EncryptedPoint<#algorithm, vru_noise::typenum::U3>]
+                },
 
-                ("ss", _) => quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U1, vru_noise::typenum::U3>],
-                ("ee", _) => quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::U2>],
+                ("ss", _) => {
+                    quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U1, vru_noise::typenum::U3>]
+                },
+                ("ee", _) => {
+                    quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::U2>]
+                },
 
-                ("es", _) => quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::U3>],
-                ("se", _) => quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U2, vru_noise::typenum::U1>],
+                ("es", _) => {
+                    quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U0, vru_noise::typenum::U3>]
+                },
+                ("se", _) => {
+                    quote![vru_noise::MixDh<#algorithm, vru_noise::typenum::U2, vru_noise::typenum::U1>]
+                },
 
                 ("psk", _) => quote![vru_noise::MixPsk<#algorithm>],
 

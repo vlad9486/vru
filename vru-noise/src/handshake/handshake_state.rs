@@ -151,7 +151,7 @@ where
                         if length > 0 {
                             let buffer =
                                 payload_read_fn(length).await.map_err(IoErrorReadPayload)?;
-                            array.as_mut().clone_from_slice(&buffer[0..length]);
+                            array.clone_from_slice(&buffer[0..length]);
                         };
                         let output = <H::Output as LineValid>::try_clone_array(&array)
                             .map_err(BadPayload)?;
@@ -173,7 +173,7 @@ where
                         let io = if length > 0 {
                             let (buffer, io) =
                                 read_fn(io, length).await.map_err(IoErrorReadMessage)?;
-                            array.as_mut().clone_from_slice(&buffer[0..length]);
+                            array.clone_from_slice(&buffer[0..length]);
                             io
                         } else {
                             io

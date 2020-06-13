@@ -1,6 +1,6 @@
 [package]
 name = "vru-noise"
-version = "1.1.0"
+version = "1.1.1"
 authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -8,7 +8,7 @@ description = "Noise handshake protocol implemented in Rust"
 repository = "https://github.com/vlad9486/vru"
 
 [dependencies.rac]
-version = "1.0"
+version = "1.1"
 
 [dependencies.zeroize]
 version = "1.1"

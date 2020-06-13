@@ -40,7 +40,7 @@ async fn lndg() {
 
             let (chaining_key_, key_) = A::split_2(chaining_key, &self.0);
             *chaining_key = chaining_key_;
-            *key = A::Aead::new(key_.clone());
+            *key = A::Aead::new(&key_);
             self.0 = key_;
         }
     }
