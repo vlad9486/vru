@@ -2,17 +2,17 @@ use super::noise_nonce::NoiseNonce;
 
 use core::marker::PhantomData;
 use rac::{LineValid, Line, Concat, Curve};
-use digest::{Input, BlockInput, FixedOutput, Reset};
+use digest::{Update, BlockInput, FixedOutput, Reset};
 use generic_array::{
     GenericArray, ArrayLength,
     typenum::{Unsigned, Bit},
 };
-use aead::{NewAead, Aead};
+use aead::{NewAead, AeadInPlace};
 
 type HkdfLength<Ca> = <<Ca as CipherAlgorithm>::HkdfSplit as HkdfSplit>::Length;
 pub type ChainingKey<Ca> = GenericArray<u8, HkdfLength<Ca>>;
 pub type HashLength<Na> = <<Na as NoiseAlgorithm>::MixHash as MixHash>::Length;
-pub type Tag<Ca> = GenericArray<u8, <<Ca as CipherAlgorithm>::Aead as Aead>::TagSize>;
+pub type Tag<Ca> = GenericArray<u8, <<Ca as CipherAlgorithm>::Aead as AeadInPlace>::TagSize>;
 pub type EncryptedPayload<Na, P> = Concat<
     GenericArray<u8, <P as LineValid>::Length>,
     Tag<<Na as NoiseAlgorithm>::CipherAlgorithm>,
@@ -30,7 +30,7 @@ pub trait NoiseAlgorithm {
 
 impl<K, D, C, F> NoiseAlgorithm for (K, D, C, F)
 where
-    K: NewAead + Aead + NoiseNonce + Clone,
+    K: NewAead + AeadInPlace + NoiseNonce + Clone,
     D: MixHash<Length = <D as HkdfSplit>::Length> + HkdfSplit,
     C: Curve,
     F: Bit,
@@ -42,7 +42,7 @@ where
 }
 
 pub trait CipherAlgorithm {
-    type Aead: NewAead + Aead + NoiseNonce + Clone;
+    type Aead: NewAead + AeadInPlace + NoiseNonce + Clone;
     type HkdfSplit: HkdfSplit;
 
     fn truncate(hash: &ChainingKey<Self>) -> AeadKey<Self>;
@@ -61,7 +61,7 @@ pub trait CipherAlgorithm {
 
 impl<K, D> CipherAlgorithm for (K, D)
 where
-    K: NewAead + Aead + NoiseNonce + Clone,
+    K: NewAead + AeadInPlace + NoiseNonce + Clone,
     D: HkdfSplit,
 {
     type Aead = K;
@@ -151,7 +151,7 @@ pub trait MixHash {
 
 impl<D> MixHash for D
 where
-    D: Input + FixedOutput + Default,
+    D: Update + FixedOutput + Default,
 {
     type Length = <D as FixedOutput>::OutputSize;
 
@@ -159,14 +159,14 @@ where
     where
         T: AsRef<[u8]>,
     {
-        D::default().chain(data).fixed_result()
+        D::default().chain(data).finalize_fixed()
     }
 
     fn mix_hash<T>(hash: &mut GenericArray<u8, Self::Length>, data: &T)
     where
         T: AsRef<[u8]>,
     {
-        *hash = D::default().chain(&hash).chain(data).fixed_result();
+        *hash = D::default().chain(&hash).chain(data).finalize_fixed();
     }
 }
 
@@ -201,7 +201,7 @@ type Hash<D> = GenericArray<u8, <D as FixedOutput>::OutputSize>;
 
 impl<D> HkdfSplit for D
 where
-    D: Input + BlockInput + FixedOutput + Reset + Default + Clone,
+    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
     D::BlockSize: Clone,
     Concat<Hash<D>, Hash<D>>: Line,
     Concat<Concat<Hash<D>, Hash<D>>, Hash<D>>: Line,

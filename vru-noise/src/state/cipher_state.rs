@@ -3,7 +3,7 @@ use super::{
     traits::{CipherAlgorithm, Rotor, Tag, AeadKey, ChainingKey},
 };
 
-use aead::{NewAead, Aead};
+use aead::{NewAead, AeadInPlace};
 use generic_array::GenericArray;
 use zeroize::Zeroize;
 
@@ -37,17 +37,17 @@ where
     R: Rotor<A>,
 {
     pub fn new(chaining_key: &ChainingKey<A>) -> Self {
-        Self::reset(chaining_key.clone(), GenericArray::default())
+        Self::reset(chaining_key.clone(), &GenericArray::default())
     }
 
-    fn reset<Nr>(chaining_key: ChainingKey<A>, key: AeadKey<A>) -> CipherState<A, Nr>
+    fn reset<Nr>(chaining_key: ChainingKey<A>, key: &AeadKey<A>) -> CipherState<A, Nr>
     where
         Nr: Rotor<A>,
     {
         let rotor = Nr::new(&key);
         CipherState {
             chaining_key: chaining_key,
-            key: A::Aead::new(key),
+            key: A::Aead::new(&key),
             nonce: 0,
             encrypted: 0,
             decrypted: 0,
@@ -57,7 +57,7 @@ where
 
     fn reset_preserve_counters(&mut self, chaining_key: ChainingKey<A>, key: AeadKey<A>) {
         self.chaining_key = chaining_key;
-        self.key = A::Aead::new(key);
+        self.key = A::Aead::new(&key);
         self.nonce = 0;
     }
 
@@ -135,8 +135,8 @@ where
         };
 
         CipherPair {
-            send: Self::reset(self.chaining_key.clone(), send),
-            receive: Self::reset(self.chaining_key, receive),
+            send: Self::reset(self.chaining_key.clone(), &send),
+            receive: Self::reset(self.chaining_key, &receive),
         }
     }
 }

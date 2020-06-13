@@ -64,20 +64,16 @@ async fn lndg() {
         .handshake::<H, _, U65, U0, _, _, _, _, _, _, _, _, R>(
             true,
             stream,
-            &mut |mut stream, length| {
-                async move {
-                    let mut buffer = GenericArray::default();
-                    stream.read_exact(&mut [0]).await?;
-                    stream.read_exact(&mut buffer[0..length]).await?;
-                    Ok((buffer, stream))
-                }
+            &mut |mut stream, length| async move {
+                let mut buffer = GenericArray::default();
+                stream.read_exact(&mut [0]).await?;
+                stream.read_exact(&mut buffer[0..length]).await?;
+                Ok((buffer, stream))
             },
-            &mut |mut stream, length, buffer| {
-                async move {
-                    stream.write_all(&[0]).await?;
-                    stream.write_all(&buffer[0..length]).await?;
-                    Ok(stream)
-                }
+            &mut |mut stream, length, buffer| async move {
+                stream.write_all(&[0]).await?;
+                stream.write_all(&buffer[0..length]).await?;
+                Ok(stream)
             },
             &mut |_length| async { Ok(GenericArray::default()) },
             &mut |_length, _buffer| async { Ok(()) },
