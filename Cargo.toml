@@ -5,4 +5,5 @@ members = [
     "vru-noise/vru-noise-macros",
     "vru-sphinx",
     "vru-transport",
+    "vru-session",
 ]
