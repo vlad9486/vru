@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 #![allow(non_shorthand_field_patterns)]
+#![no_std]
+
+#[cfg(test)]
+extern crate std;
 
 #[cfg(all(test, feature = "serde-support"))]
 mod test;

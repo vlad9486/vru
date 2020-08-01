@@ -67,13 +67,15 @@ where
         let public_key = A::base().exp_ec(session_key);
 
         let initial = (
-            Vec::with_capacity(N::to_usize()),
+            GlobalData {
+                shared_secrets: GenericArray::default(),
+            },
             session_key.clone(),
             public_key.clone(),
         );
 
-        let (shared_secrets, _, _) =
-            path.fold(initial, |(mut s, mut secret, public), path_point| {
+        let (s, _, _) =
+            path.enumerate().fold(initial, |(mut s, mut secret, public), (index, path_point)| {
                 let shared_secret = B::tau(path_point.exp_ec(&secret));
                 let blinding = B::blinding(&public, &shared_secret);
                 // safe to unwrap because the array is result of hashing
@@ -82,18 +84,11 @@ where
                 secret = secret.mul_ff(&blinding).unwrap();
                 let public = A::base().exp_ec(&secret);
 
-                s.push(shared_secret);
+                s.shared_secrets[index] = shared_secret;
                 (s, secret, public)
             });
 
-        let mut shared_secrets_array = GenericArray::default();
-        shared_secrets_array[0..shared_secrets.len()].clone_from_slice(shared_secrets.as_slice());
-        (
-            GlobalData {
-                shared_secrets: shared_secrets_array,
-            },
-            public_key,
-        )
+        (s, public_key)
     }
 
     pub fn digest<D>(&self) -> Self
@@ -270,8 +265,8 @@ mod serde_m {
 
     use generic_array::{GenericArray, ArrayLength};
     use serde::{Serialize, Serializer, Deserialize, Deserializer};
-    use std::marker::PhantomData;
-    use std::fmt;
+    use core::marker::PhantomData;
+    use core::fmt;
 
     impl<B, L, N, P> Serialize for AuthenticatedMessage<B, L, N, P>
     where
@@ -366,7 +361,7 @@ mod implementations {
     use super::{AuthenticatedMessage, Sphinx, PayloadHmac, LocalData};
     use generic_array::ArrayLength;
     use rac::Curve;
-    use std::fmt;
+    use core::fmt;
 
     impl<B, L, N, P> fmt::Debug for AuthenticatedMessage<B, L, N, P>
     where

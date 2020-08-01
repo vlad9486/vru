@@ -1,5 +1,5 @@
 use generic_array::{GenericArray, ArrayLength};
-use std::ops::BitXorAssign;
+use core::ops::BitXorAssign;
 use keystream::KeyStream;
 
 #[cfg(feature = "serde-support")]
@@ -165,7 +165,7 @@ where
 mod implementations {
     use super::{PayloadHmac, Path};
     use generic_array::ArrayLength;
-    use std::fmt;
+    use core::fmt;
 
     impl<L, M> fmt::Debug for PayloadHmac<L, M>
     where

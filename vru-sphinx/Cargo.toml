@@ -1,6 +1,6 @@
 [package]
 name = "vru-sphinx"
-version = "1.1.0"
+version = "1.2.0"
 authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
@@ -54,6 +54,3 @@ features = ["use_std"]
 
 [dev-dependencies.hex]
 version = "0.4"
-
-[features]
-serde-support = ["serde"]
