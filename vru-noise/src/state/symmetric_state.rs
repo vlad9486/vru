@@ -14,16 +14,6 @@ where
     hash: GenericArray<u8, HashLength<A>>,
 }
 
-impl<A> Zeroize for SymmetricState<A>
-where
-    A: NoiseAlgorithm,
-{
-    fn zeroize(&mut self) {
-        self.key.zeroize();
-        self.hash.as_mut_slice().zeroize();
-    }
-}
-
 impl<A> SymmetricState<A>
 where
     A: NoiseAlgorithm,
@@ -110,7 +100,9 @@ where
     where
         R: Rotor<A::CipherAlgorithm>,
     {
-        self.key.split(swap)
+        let mut s = self;
+        s.hash.as_mut_slice().zeroize();
+        s.key.split(swap)
     }
 
     pub fn hash(&self) -> GenericArray<u8, HashLength<A>> {

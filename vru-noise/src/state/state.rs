@@ -10,7 +10,6 @@ use generic_array::{
     GenericArray,
     typenum::{Unsigned, Bit},
 };
-use zeroize::Zeroize;
 
 enum Point<C>
 where
@@ -26,33 +25,6 @@ where
         secret: C::Scalar,
         cache: RefCell<Option<CompressedCurve<C>>>,
     },
-}
-
-impl<C> Zeroize for Point<C>
-where
-    C: Curve,
-{
-    fn zeroize(&mut self) {
-        match self {
-            &mut Point::NotSetup => (),
-            &mut Point::Public {
-                public: ref mut public,
-                cache: ref mut cache,
-            } => {
-                let _ = (public, cache);
-            },
-            &mut Point::Pair {
-                public: ref mut public,
-                secret: ref mut secret,
-                cache: ref mut cache,
-            } => {
-                let _ = (public, cache);
-                // TODO: zeroize
-                // secret.as_mut().zeroize();
-                let _ = secret;
-            },
-        }
-    }
 }
 
 impl<C> Point<C>
@@ -138,17 +110,6 @@ where
     symmetric_state: SymmetricState<A>,
     points: [Point<A::Curve>; 4],
     psk: Option<AeadKey<A::CipherAlgorithm>>,
-}
-
-impl<A> Zeroize for State<A>
-where
-    A: NoiseAlgorithm,
-{
-    fn zeroize(&mut self) {
-        self.symmetric_state.zeroize();
-        self.points.iter_mut().for_each(|x| x.zeroize());
-        self.psk.as_mut().map(|x| x.as_mut_slice().zeroize());
-    }
 }
 
 impl<A> State<A>
@@ -317,6 +278,22 @@ where
         self.points[I::to_usize()]
             .compressed()
             .unwrap_or_else(|| panic!("key U{} should be store before use", I::to_usize()))
+    }
+
+    pub fn zeroize_points<F>(&mut self, op: F)
+    where
+        F: Fn(&mut <A::Curve as Curve>::Scalar),
+    {
+        self.points.iter_mut().for_each(|p| {
+            match p {
+                &mut Point::Pair {
+                    public: _,
+                    secret: ref mut secret,
+                    cache: _,
+                } => op(secret),
+                _ => (),
+            }
+        })
     }
 }
 

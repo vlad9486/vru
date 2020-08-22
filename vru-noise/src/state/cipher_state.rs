@@ -134,10 +134,13 @@ where
             (send, receive)
         };
 
-        CipherPair {
+        let cipher_pair = CipherPair {
             send: Self::reset(self.chaining_key.clone(), &send),
-            receive: Self::reset(self.chaining_key, &receive),
-        }
+            receive: Self::reset(self.chaining_key.clone(), &receive),
+        };
+        let mut s = self;
+        s.zeroize();
+        cipher_pair
     }
 }
 
