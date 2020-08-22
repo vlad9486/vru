@@ -5,7 +5,7 @@
 #[cfg(test)]
 extern crate std;
 
-#[cfg(all(test, feature = "serde-support"))]
+#[cfg(all(test, feature = "serde"))]
 mod test;
 
 mod path;

@@ -22,8 +22,7 @@ where
         B: Sphinx<AsymmetricKey = A>,
     {
         let shared_secret = B::tau(this.exp_ec(secret_key));
-        // safe to unwrap because array is result if hashing
-        let blinding = A::Scalar::try_clone_array(&B::blinding(this, &shared_secret)).unwrap();
+        let blinding = B::blinding(this, &shared_secret);
         let next = this.exp_ec(&blinding);
         (
             LocalData {
@@ -74,19 +73,19 @@ where
             public_key.clone(),
         );
 
-        let (s, _, _) =
-            path.enumerate().fold(initial, |(mut s, mut secret, public), (index, path_point)| {
+        let (s, _, _) = path.enumerate().fold(
+            initial,
+            |(mut s, mut secret, public), (index, path_point)| {
                 let shared_secret = B::tau(path_point.exp_ec(&secret));
                 let blinding = B::blinding(&public, &shared_secret);
-                // safe to unwrap because the array is result of hashing
-                let blinding = <A::Scalar as LineValid>::try_clone_array(&blinding).unwrap();
                 // safe to unwrap because the scalar is trusted
                 secret = secret.mul_ff(&blinding).unwrap();
                 let public = A::base().exp_ec(&secret);
 
                 s.shared_secrets[index] = shared_secret;
                 (s, secret, public)
-            });
+            },
+        );
 
         (s, public_key)
     }
@@ -153,6 +152,7 @@ where
         H: Iterator<Item = GenericArray<u8, L>> + DoubleEndedIterator + ExactSizeIterator,
     {
         use keystream::KeyStream;
+        use core::iter;
 
         let GlobalData {
             shared_secrets: shared_secrets,
@@ -185,13 +185,15 @@ where
             let mut stream = B::pi(&shared_secrets[index]);
             stream.xor_read(message.as_mut()).unwrap();
 
-            let mu = B::mu(&shared_secrets[index]);
-            let mu = routing_info
-                .as_ref()
-                .iter()
-                .fold(mu, |mu, hop| B::chain(B::chain(mu, &hop.data), &hop.hmac));
-            let mu = B::chain(mu, associated_data.as_ref());
-            hmac = B::output(mu);
+            hmac = B::mu(
+                &shared_secrets[index],
+                routing_info
+                    .as_ref()
+                    .iter()
+                    .map(|x| iter::once(x.data.as_ref()).chain(iter::once(x.hmac.as_ref())))
+                    .flatten()
+                    .chain(iter::once(associated_data.as_ref())),
+            )
         });
 
         AuthenticatedMessage {
@@ -210,17 +212,20 @@ where
         T: AsRef<[u8]>,
     {
         use keystream::KeyStream;
+        use core::iter;
 
         let (mut routing_info, hmac_received, mut message) =
             (self.routing_info, self.hmac, self.message);
 
-        let mu = B::mu(&local.shared_secret);
-        let mu = routing_info
-            .as_ref()
-            .iter()
-            .fold(mu, |mu, hop| B::chain(B::chain(mu, &hop.data), &hop.hmac));
-        let mu = B::chain(mu, associated_data.as_ref());
-        let hmac = B::output(mu);
+        let hmac = B::mu(
+            &local.shared_secret,
+            routing_info
+                .as_ref()
+                .iter()
+                .map(|x| iter::once(x.data.as_ref()).chain(iter::once(x.hmac.as_ref())))
+                .flatten()
+                .chain(iter::once(associated_data.as_ref())),
+        );
 
         if hmac_received != hmac {
             Err(())
@@ -259,7 +264,7 @@ where
     }
 }
 
-#[cfg(feature = "serde-support")]
+#[cfg(feature = "serde")]
 mod serde_m {
     use super::{AuthenticatedMessage, Path, PayloadHmac, Sphinx};
 

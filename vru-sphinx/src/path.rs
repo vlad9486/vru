@@ -2,17 +2,17 @@ use generic_array::{GenericArray, ArrayLength};
 use core::ops::BitXorAssign;
 use keystream::KeyStream;
 
-#[cfg(feature = "serde-support")]
+#[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 
-#[cfg_attr(feature = "serde-support", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PayloadHmac<L, M>
 where
     L: ArrayLength<u8>,
     M: ArrayLength<u8>,
 {
     #[cfg_attr(
-        feature = "serde-support",
+        feature = "serde",
         serde(bound(
             serialize = "GenericArray<u8, L>: Serialize",
             deserialize = "GenericArray<u8, L>: Deserialize<'de>"
@@ -20,7 +20,7 @@ where
     )]
     pub data: GenericArray<u8, L>,
     #[cfg_attr(
-        feature = "serde-support",
+        feature = "serde",
         serde(bound(
             serialize = "GenericArray<u8, M>: Serialize",
             deserialize = "GenericArray<u8, M>: Deserialize<'de>"
@@ -77,7 +77,7 @@ where
     }
 }
 
-#[cfg_attr(feature = "serde-support", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Path<L, M, N>
 where
     L: ArrayLength<u8>,
@@ -85,7 +85,7 @@ where
     N: ArrayLength<PayloadHmac<L, M>>,
 {
     #[cfg_attr(
-        feature = "serde-support",
+        feature = "serde",
         serde(bound(
             serialize = "PayloadHmac<L, M>: Serialize",
             deserialize = "PayloadHmac<L, M>: Deserialize<'de>"

@@ -284,15 +284,13 @@ where
     where
         F: Fn(&mut <A::Curve as Curve>::Scalar),
     {
-        self.points.iter_mut().for_each(|p| {
-            match p {
-                &mut Point::Pair {
-                    public: _,
-                    secret: ref mut secret,
-                    cache: _,
-                } => op(secret),
-                _ => (),
-            }
+        self.points.iter_mut().for_each(|p| match p {
+            &mut Point::Pair {
+                public: _,
+                secret: ref mut secret,
+                cache: _,
+            } => op(secret),
+            _ => (),
         })
     }
 }
