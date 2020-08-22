@@ -163,7 +163,7 @@ fn packet() {
         .into_iter();
 
     let (data, public_key) = GlobalData::new::<_, FullSphinx>(&secret_key, path);
-    let packet = FullPacket::<U33, U20, _>::new(data, associated_data, payloads, []);
+    let packet = FullPacket::<U33, U20, _>::new(&data, associated_data, payloads, []);
 
     use tirse::{DefaultBinarySerializer, WriteWrapper};
     use serde::Serialize;
@@ -265,7 +265,7 @@ fn path() {
     let secret = SecretKey::new(&mut rand::thread_rng());
     let (data, public_key) = GlobalData::new::<_, TruncatedSphinx>(&secret, path.into_iter());
     let packet = TruncatedPacket::<U19, U5, Message>::new(
-        data,
+        &data,
         &[],
         payloads.clone().into_iter(),
         message.clone(),

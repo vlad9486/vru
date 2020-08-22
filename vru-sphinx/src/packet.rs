@@ -142,7 +142,7 @@ where
     P: AsMut<[u8]>,
 {
     pub fn new<T, H>(
-        data: GlobalData<B::AsymmetricKey, N>,
+        data: &GlobalData<B::AsymmetricKey, N>,
         associated_data: T,
         payloads: H,
         message: P,
@@ -154,8 +154,8 @@ where
         use keystream::KeyStream;
         use core::iter;
 
-        let GlobalData {
-            shared_secrets: shared_secrets,
+        let &GlobalData {
+            shared_secrets: ref shared_secrets,
         } = data;
         let mut hmac = GenericArray::default();
         let mut routing_info = Path::<L, B::MacLength, N>::new();
