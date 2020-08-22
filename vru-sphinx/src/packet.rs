@@ -1,10 +1,11 @@
+use rac::{LineValid, Curve};
+use generic_array::{GenericArray, ArrayLength};
+use cryptography::{
+    digest::{Update, FixedOutput},
+    stream_cipher::{SyncStreamCipher, SyncStreamCipherSeek},
+};
 use super::path::{PayloadHmac, Path};
 use super::sphinx::{Sphinx, SharedSecret};
-
-use generic_array::{GenericArray, ArrayLength};
-use rac::{LineValid, Curve};
-use keystream::SeekableKeyStream;
-use digest::{Update, FixedOutput};
 
 pub struct LocalData<A>
 where
@@ -151,7 +152,6 @@ where
         T: AsRef<[u8]>,
         H: Iterator<Item = GenericArray<u8, L>> + DoubleEndedIterator + ExactSizeIterator,
     {
-        use keystream::KeyStream;
         use core::iter;
 
         let &GlobalData {
@@ -165,8 +165,7 @@ where
         for i in 0..length {
             let mut s = B::rho(&shared_secrets[i]);
             let size = PayloadHmac::<L, B::MacLength>::size();
-            s.seek_to((size * (Path::<L, B::MacLength, N>::size() - i)) as _)
-                .unwrap();
+            s.seek((size * (Path::<L, B::MacLength, N>::size() - i)) as _);
             let start = Path::<L, B::MacLength, N>::size() - length;
             routing_info.as_mut()[start..(start + i + 1)]
                 .iter_mut()
@@ -183,7 +182,7 @@ where
             routing_info ^= &mut stream;
 
             let mut stream = B::pi(&shared_secrets[index]);
-            stream.xor_read(message.as_mut()).unwrap();
+            stream.apply_keystream(message.as_mut());
 
             hmac = B::mu(
                 &shared_secrets[index],
@@ -211,7 +210,6 @@ where
     where
         T: AsRef<[u8]>,
     {
-        use keystream::KeyStream;
         use core::iter;
 
         let (mut routing_info, hmac_received, mut message) =
@@ -236,7 +234,7 @@ where
             routing_info ^= &mut stream;
 
             let mut stream = B::pi(&local.shared_secret);
-            stream.xor_read(message.as_mut()).unwrap();
+            stream.apply_keystream(message.as_mut());
 
             let PayloadHmac {
                 data: item_data,
@@ -266,12 +264,10 @@ where
 
 #[cfg(feature = "serde")]
 mod serde_m {
-    use super::{AuthenticatedMessage, Path, PayloadHmac, Sphinx};
-
     use generic_array::{GenericArray, ArrayLength};
     use serde::{Serialize, Serializer, Deserialize, Deserializer};
-    use core::marker::PhantomData;
-    use core::fmt;
+    use core::{marker::PhantomData, fmt};
+    use super::{AuthenticatedMessage, Path, PayloadHmac, Sphinx};
 
     impl<B, L, N, P> Serialize for AuthenticatedMessage<B, L, N, P>
     where
@@ -363,10 +359,10 @@ mod serde_m {
 }
 
 mod implementations {
-    use super::{AuthenticatedMessage, Sphinx, PayloadHmac, LocalData};
     use generic_array::ArrayLength;
     use rac::Curve;
     use core::fmt;
+    use super::{AuthenticatedMessage, Sphinx, PayloadHmac, LocalData};
 
     impl<B, L, N, P> fmt::Debug for AuthenticatedMessage<B, L, N, P>
     where

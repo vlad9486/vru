@@ -4,93 +4,25 @@ use std::{vec::Vec, string::String, dbg};
 use super::Processed;
 
 mod packet {
-    use super::super::{PseudoRandomStream, AuthenticatedMessage};
     use sha2::Sha256;
-    use chacha::ChaCha;
+    use chacha20::ChaCha20;
     use hmac::Hmac;
     use secp256k1::PublicKey;
-    use digest::{Update, BlockInput, FixedOutput, Reset};
-    use generic_array::{
-        GenericArray,
-        typenum::{U16, U32},
-    };
+    use crate::AuthenticatedMessage;
 
-    pub type FullSphinx = (PublicKey, Hmac<Sha256>, Sha256, ChaCha);
+    pub type FullSphinx = (PublicKey, Hmac<Sha256>, Sha256, ChaCha20);
     pub type FullPacket<L, N, P> = AuthenticatedMessage<FullSphinx, L, N, P>;
-    pub type TruncatedSphinx = (PublicKey, Hmac<TruncatedSha256>, Sha256, ChaCha);
-    pub type TruncatedPacket<L, N, P> = AuthenticatedMessage<TruncatedSphinx, L, N, P>;
-
-    impl PseudoRandomStream<U16> for ChaCha {
-        fn seed(v: GenericArray<u8, U16>) -> Self {
-            let mut array = [0; 32];
-            array[0..16].copy_from_slice(v.as_ref());
-            array[16..].copy_from_slice(v.as_ref());
-            ChaCha::new_chacha20(&array, &[0u8; 8])
-        }
-    }
-
-    impl PseudoRandomStream<U32> for ChaCha {
-        fn seed(v: GenericArray<u8, U32>) -> Self {
-            let mut array = [0; 32];
-            array.copy_from_slice(v.as_ref());
-            ChaCha::new_chacha20(&array, &[0u8; 8])
-        }
-    }
-
-    pub struct TruncatedSha256(Sha256);
-
-    impl Update for TruncatedSha256 {
-        fn update(&mut self, data: impl AsRef<[u8]>) {
-            self.0.update(data)
-        }
-    }
-
-    impl BlockInput for TruncatedSha256 {
-        type BlockSize = <Sha256 as BlockInput>::BlockSize;
-    }
-
-    impl FixedOutput for TruncatedSha256 {
-        type OutputSize = U16;
-
-        fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
-            let mut full = GenericArray::default();
-            self.0.finalize_into(&mut full);
-            out.clone_from_slice(&full[..16]);
-        }
-
-        fn finalize_into_reset(&mut self, out: &mut GenericArray<u8, Self::OutputSize>) {
-            let mut full = GenericArray::default();
-            self.0.finalize_into_reset(&mut full);
-            out.clone_from_slice(&full[..16]);
-        }
-    }
-
-    impl Reset for TruncatedSha256 {
-        fn reset(&mut self) {
-            self.0.reset()
-        }
-    }
-
-    impl Default for TruncatedSha256 {
-        fn default() -> Self {
-            TruncatedSha256(Sha256::default())
-        }
-    }
-
-    impl Clone for TruncatedSha256 {
-        fn clone(&self) -> Self {
-            TruncatedSha256(self.0.clone())
-        }
-    }
 }
 
-use self::packet::{FullSphinx, FullPacket, TruncatedSphinx, TruncatedPacket};
+use self::packet::{FullSphinx, FullPacket};
 
 #[test]
 fn packet() {
-    use super::GlobalData;
-    use generic_array::typenum::{U33, U20};
     use rac::Curve;
+    use generic_array::typenum::{U33, U20};
+    use tirse::{DefaultBinarySerializer, WriteWrapper};
+    use serde::Serialize;
+    use super::GlobalData;
 
     let reference_packet = "\
                             02e90777e8702e3d587e17c8627a997b0225f4a5a5f82115f13046aab95513c6d6\
@@ -165,9 +97,6 @@ fn packet() {
     let (data, public_key) = GlobalData::new::<_, FullSphinx>(&secret_key, path);
     let packet = FullPacket::<U33, U20, _>::new(&data, associated_data, payloads, []);
 
-    use tirse::{DefaultBinarySerializer, WriteWrapper};
-    use serde::Serialize;
-
     let s = DefaultBinarySerializer::<WriteWrapper<Vec<_>>, String>::new(Vec::new());
     let v = (public_key.compress(), packet)
         .serialize(s)
@@ -180,17 +109,19 @@ fn packet() {
 
 #[test]
 fn path() {
-    use super::{LocalData, GlobalData};
-    use generic_array::typenum::{U19, U5};
-    use generic_array::sequence::GenericSequence;
+    use generic_array::{
+        sequence::GenericSequence,
+        typenum::{U19, U5},
+    };
     use secp256k1::{Secp256k1, rand};
     use either::{Left, Right};
-    use core::fmt;
     use serde::{Serialize, Serializer};
     use tirse::{DefaultBinarySerializer, WriteWrapper};
     use rac::Curve;
+    use core::fmt;
+    use super::{LocalData, GlobalData};
 
-    const MESSAGE_LENGTH: usize = 4096 - 224;
+    const MESSAGE_LENGTH: usize = 4096 - 320;
 
     #[derive(Clone)]
     struct Message([u8; MESSAGE_LENGTH]);
@@ -263,8 +194,8 @@ fn path() {
     let message = Message::random();
 
     let secret = SecretKey::new(&mut rand::thread_rng());
-    let (data, public_key) = GlobalData::new::<_, TruncatedSphinx>(&secret, path.into_iter());
-    let packet = TruncatedPacket::<U19, U5, Message>::new(
+    let (data, public_key) = GlobalData::new::<_, FullSphinx>(&secret, path.into_iter());
+    let packet = FullPacket::<U19, U5, Message>::new(
         &data,
         &[],
         payloads.clone().into_iter(),
@@ -284,7 +215,7 @@ fn path() {
             .into_iter()
             .fold(initial, |(packet, mut payloads, public_key), secret| {
                 let packet = packet.left().unwrap();
-                let (local, public_key) = LocalData::next::<TruncatedSphinx>(&secret, &public_key);
+                let (local, public_key) = LocalData::next::<FullSphinx>(&secret, &public_key);
                 match packet.process(&[], &local).unwrap() {
                     Processed::Forward {
                         data: data,

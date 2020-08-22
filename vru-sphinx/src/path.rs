@@ -1,9 +1,10 @@
 use generic_array::{GenericArray, ArrayLength};
-use core::ops::BitXorAssign;
-use keystream::KeyStream;
+use cryptography::stream_cipher::SyncStreamCipher;
 
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+
+use core::ops::BitXorAssign;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PayloadHmac<L, M>
@@ -69,11 +70,11 @@ impl<'a, L, M, I> BitXorAssign<&'a mut I> for PayloadHmac<L, M>
 where
     L: ArrayLength<u8>,
     M: ArrayLength<u8>,
-    I: KeyStream,
+    I: SyncStreamCipher,
 {
     fn bitxor_assign(&mut self, rhs: &'a mut I) {
-        rhs.xor_read(self.data.as_mut_slice()).unwrap();
-        rhs.xor_read(self.hmac.as_mut_slice()).unwrap();
+        rhs.apply_keystream(self.data.as_mut_slice());
+        rhs.apply_keystream(self.hmac.as_mut_slice());
     }
 }
 
@@ -155,7 +156,7 @@ where
     L: ArrayLength<u8>,
     M: ArrayLength<u8>,
     N: ArrayLength<PayloadHmac<L, M>>,
-    I: KeyStream,
+    I: SyncStreamCipher,
 {
     fn bitxor_assign(&mut self, rhs: &'a mut I) {
         self.as_mut().iter_mut().for_each(|x| *x ^= rhs);
@@ -163,9 +164,9 @@ where
 }
 
 mod implementations {
-    use super::{PayloadHmac, Path};
     use generic_array::ArrayLength;
     use core::fmt;
+    use super::{PayloadHmac, Path};
 
     impl<L, M> fmt::Debug for PayloadHmac<L, M>
     where

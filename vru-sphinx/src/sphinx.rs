@@ -1,22 +1,17 @@
 use generic_array::{GenericArray, ArrayLength};
-use keystream::SeekableKeyStream;
 use rac::{LineValid, Curve};
-use crypto_mac::{Mac, NewMac};
-use digest::{Update, FixedOutput};
-
-pub trait PseudoRandomStream<T>
-where
-    T: ArrayLength<u8>,
-{
-    fn seed(v: GenericArray<u8, T>) -> Self;
-}
+use cryptography::{
+    digest::{Update, FixedOutput},
+    mac::{Mac, NewMac},
+    stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
+};
 
 pub type SharedSecret<A> = GenericArray<u8, <<A as Curve>::Scalar as LineValid>::Length>;
 
 pub trait Sphinx {
     type MacLength: ArrayLength<u8>;
     type AsymmetricKey: Curve;
-    type Stream: SeekableKeyStream;
+    type Stream: SyncStreamCipher + SyncStreamCipherSeek;
 
     fn mu<'a, I>(
         shared: &SharedSecret<Self::AsymmetricKey>,
@@ -42,7 +37,7 @@ where
     A: Curve,
     C: Mac + NewMac,
     D: Default + Update + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
-    S: PseudoRandomStream<C::OutputSize> + SeekableKeyStream,
+    S: SyncStreamCipher + SyncStreamCipherSeek + NewStreamCipher<KeySize = C::OutputSize>,
 {
     type MacLength = C::OutputSize;
     type AsymmetricKey = A;
@@ -67,14 +62,14 @@ where
         let mut collector = C::new_varkey(b"rho").unwrap();
         collector.update(shared);
         let key = collector.finalize().into_bytes();
-        S::seed(key)
+        S::new(&key, &GenericArray::default())
     }
 
     fn pi(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Stream {
         let mut collector = C::new_varkey(b"um").unwrap();
         collector.update(shared);
         let key = collector.finalize().into_bytes();
-        S::seed(key)
+        S::new(&key, &GenericArray::default())
     }
 
     fn tau(public_key: Self::AsymmetricKey) -> SharedSecret<Self::AsymmetricKey> {

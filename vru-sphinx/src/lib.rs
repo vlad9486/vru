@@ -12,6 +12,6 @@ mod path;
 mod sphinx;
 mod packet;
 
-pub use self::sphinx::{SharedSecret, Sphinx, PseudoRandomStream};
-pub use self::packet::{AuthenticatedMessage, LocalData, GlobalData, Processed};
 pub use rac;
+pub use self::sphinx::{SharedSecret, Sphinx};
+pub use self::packet::{AuthenticatedMessage, LocalData, GlobalData, Processed};
