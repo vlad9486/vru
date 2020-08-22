@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 #![no_std]
+#![allow(non_shorthand_field_patterns)]
 
 pub extern crate generic_array;
 
@@ -10,7 +11,10 @@ mod concat;
 pub use self::concat::Concat;
 
 mod elliptic;
-pub use self::elliptic::{Scalar, Curve, Signature};
+pub use self::elliptic::{Scalar, Curve};
+
+mod schnorr;
+pub use self::schnorr::{Signature, Schnorr};
 
 #[cfg(feature = "secp256k1")]
 mod secp256k1_m;

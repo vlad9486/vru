@@ -1,4 +1,4 @@
-use crate::{LineValid, Scalar, Curve, Signature};
+use crate::{LineValid, Scalar, Curve};
 
 use generic_array::{
     GenericArray,
@@ -23,6 +23,11 @@ impl Scalar for SecretKey {
         let mut c = self.clone();
         c.add_assign(rhs.clone_line().as_slice()).map_err(|_| ())?;
         Ok(c)
+    }
+
+    fn sub_ff(&self, rhs: &Self) -> Result<Self, ()> {
+        let _ = rhs;
+        unimplemented!()
     }
 
     fn mul_ff(&self, rhs: &Self) -> Result<Self, ()> {
@@ -56,6 +61,7 @@ impl LineValid for PublicKey {
 impl Curve for PublicKey {
     type Scalar = SecretKey;
     type CompressedLength = U33;
+    type CoordinateLength = U32;
 
     const NAME: &'static str = "secp256k1";
 
@@ -77,8 +83,7 @@ impl Curve for PublicKey {
     }
 
     fn mul_ec(&self, rhs: &Self) -> Self {
-        let _ = rhs;
-        unimplemented!()
+        self.combine(rhs).unwrap()
     }
 
     fn exp_ec(&self, rhs: &Self::Scalar) -> Self {
@@ -102,6 +107,13 @@ impl Curve for PublicKey {
         a.clone_from_slice(buffer.as_ref());
         a
     }
+
+    fn x_coordinate(&self) -> GenericArray<u8, Self::CoordinateLength> {
+        let buffer = self.serialize();
+        let mut a = GenericArray::default();
+        a.clone_from_slice(&buffer[1..]);
+        a
+    }
 }
 
 impl LineValid for Secp256k1Signature {
@@ -115,28 +127,5 @@ impl LineValid for Secp256k1Signature {
         let mut a = GenericArray::default();
         a.clone_from_slice(self.serialize_compact().as_ref());
         a
-    }
-}
-
-impl Signature for Secp256k1Signature {
-    type Scalar = SecretKey;
-    type Curve = PublicKey;
-
-    fn sign(secret_key: &Self::Scalar, message: &Self::Scalar) -> Self {
-        use secp256k1::{Secp256k1, Message};
-
-        let context = Secp256k1::signing_only();
-        // safe to unwrap because the type system guarantee the length of the slice is proper
-        let m = Message::from_slice(message.clone_line().as_slice()).unwrap();
-        context.sign(&m, &secret_key)
-    }
-
-    fn verify(&self, public_key: &Self::Curve, message: &Self::Scalar) -> Result<(), ()> {
-        use secp256k1::{Secp256k1, Message};
-
-        let context = Secp256k1::verification_only();
-        // safe to unwrap because the type system guarantee the length of the slice is proper
-        let m = Message::from_slice(message.clone_line().as_slice()).unwrap();
-        context.verify(&m, self, public_key).map_err(|_| ())
     }
 }
