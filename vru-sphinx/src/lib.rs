@@ -14,4 +14,4 @@ mod packet;
 
 pub use self::sphinx::{SharedSecret, Sphinx, PseudoRandomStream};
 pub use self::packet::{AuthenticatedMessage, LocalData, GlobalData, Processed};
-pub use generic_array;
+pub use rac;
