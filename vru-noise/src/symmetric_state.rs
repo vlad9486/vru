@@ -1,8 +1,8 @@
+use cryptography::aead::{NewAead, AeadInPlace};
 use generic_array::{
     GenericArray,
     typenum::{self, Unsigned},
 };
-use aead::{NewAead, AeadInPlace};
 use byteorder::ByteOrder;
 use core::{fmt, marker::PhantomData, ops::Add};
 use super::{

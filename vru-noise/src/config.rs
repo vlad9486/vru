@@ -1,5 +1,5 @@
+use cryptography::aead::{NewAead, AeadInPlace};
 use byteorder::ByteOrder;
-use aead::{NewAead, AeadInPlace};
 use super::hash::{MixHash, HkdfSplitExt};
 
 pub trait Config {

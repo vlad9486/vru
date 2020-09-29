@@ -1,10 +1,12 @@
-use digest::{Update, BlockInput, FixedOutput, Reset};
+use cryptography::{
+    digest::{Update, BlockInput, FixedOutput, Reset},
+    aead::NewAead,
+};
 use generic_array::{
     GenericArray, ArrayLength,
     sequence::GenericSequence,
-    typenum::{Unsigned, U2, U3},
+    typenum::{self, Unsigned},
 };
-use aead::NewAead;
 use core::ops::Mul;
 
 pub trait MixHash
@@ -140,9 +142,9 @@ where
 impl<A, T> HkdfSplitExt<A> for T
 where
     A: NewAead,
-    T: HkdfSplit<U2> + HkdfSplit<U3, L = <Self as HkdfSplit<U2>>::L>,
+    T: HkdfSplit<typenum::U2> + HkdfSplit<typenum::U3, L = <Self as HkdfSplit<typenum::U2>>::L>,
 {
-    type L = <T as HkdfSplit<U2>>::L;
+    type L = <T as HkdfSplit<typenum::U2>>::L;
 
     fn split_final(
         chaining_key: &[u8],

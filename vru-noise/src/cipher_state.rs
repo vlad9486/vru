@@ -1,4 +1,4 @@
-use aead::{NewAead, AeadInPlace};
+use cryptography::aead::{NewAead, AeadInPlace};
 use generic_array::GenericArray;
 use byteorder::ByteOrder;
 use core::{marker::PhantomData, fmt};
