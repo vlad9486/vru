@@ -216,7 +216,7 @@ where
         let hash = C::MixHash::mix_parts(self.hash.clone(), &[data, tag.as_ref()]);
         self.key
             .aead
-            .decrypt_in_place_detached(&nonce, &hash, data, &tag)
+            .decrypt_in_place_detached(&nonce, &self.hash, data, &tag)
             .map(|()| SymmetricState {
                 key: self.key.increase(),
                 hash: hash,
