@@ -18,9 +18,12 @@ tirse = { version = "0.6", features = ["use_std"] }
 either = { version = "1.6" }
 generic-array = { version = "0.14" }
 curve25519-dalek = { version = "3.0" }
+
 pqcrypto-kyber = { version = "0.6" }
 pqcrypto-traits = { version = "0.3" }
-pq-pseudorandom = { path = "../../pq-pseudorandom" }
+num-bigint = { version = "0.3" }
+num-traits = { version = "0.2" }
+
 chacha20poly1305 = { version = "0.6" }
 sha2 = { version = "0.9" }
 sha3 = { version = "0.9" }
@@ -31,4 +34,4 @@ rand = { version = "0.7" }
 failure = { version = "0.1", features = ["derive"] }
 
 [dev-dependencies]
-hex = { version = "0.4" }
+hex = "0.4"

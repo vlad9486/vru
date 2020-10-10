@@ -7,83 +7,21 @@ use curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar};
 use failure::Fail;
 use std::marker::PhantomData;
 
-mod pq {
-    use rac::{LineValid, Line, Concat};
-    use generic_array::{GenericArray, typenum};
-    use pqcrypto_kyber::kyber768;
-    use pqcrypto_traits::kem::{PublicKey as _, SharedSecret as _, Ciphertext as _};
-    use pq_pseudorandom::{pack_kyber768, unpack_kyber768, KYBER768_PACKED_POLY_PADDING};
-
-    pub struct PqPublicKey(kyber768::PublicKey);
-
-    pub struct PqSecretKey(kyber768::SecretKey);
-
-    pub type PqPublicKeyCompressed = Concat<GenericArray<u8, typenum::U1024>, GenericArray<u8, typenum::U132>>;
-    pub type PqSharedSecret = GenericArray<u8, typenum::U32>;
-    pub type PqCipherText = Concat<GenericArray<u8, typenum::U1024>, GenericArray<u8, typenum::U64>>;
-
-    impl PqPublicKey {
-        pub fn compress<R>(&self, rng: &mut R) -> PqPublicKeyCompressed
-        where
-            R: rand::Rng,
-        {
-            let padding = loop {
-                let p = rng.gen();
-                if p & 0b111111 < KYBER768_PACKED_POLY_PADDING {
-                    break p;
-                }
-            };
-            let mut d = GenericArray::default();
-            d.as_mut_slice().clone_from_slice(pack_kyber768(self.0.as_bytes(), padding).as_ref());
-            Concat::clone_array(&d)
-        }
-
-        pub fn decompress(c: &PqPublicKeyCompressed) -> Self {
-            use std::convert::TryInto;
-
-            let data = c.clone_line();
-            let data = unpack_kyber768(data.as_ref().try_into().unwrap());
-            PqPublicKey(kyber768::PublicKey::from_bytes(data.as_ref()).unwrap())
-        }
-
-        pub fn key_pair() -> (PqSecretKey, Self) {
-            let (pk, sk) = kyber768::keypair();
-            (PqSecretKey(sk), PqPublicKey(pk))
-        }
-
-        pub fn encapsulate(&self) -> (PqSharedSecret, PqCipherText) {
-            let (ss, ct) = kyber768::encapsulate(&self.0);
-            let mut d = GenericArray::default();
-            d.as_mut_slice().clone_from_slice(ss.as_bytes());
-            let ss = d;
-            let mut d = GenericArray::default();
-            d.as_mut_slice().clone_from_slice(ct.as_bytes());
-            let ct = Concat::clone_array(&d);
-            (ss, ct)
-        }
-
-        pub fn decapsulate(sk: &PqSecretKey, ct: &PqCipherText) -> PqSharedSecret {
-            let ct = kyber768::Ciphertext::from_bytes(ct.clone_line().as_ref()).unwrap();
-            let ss = kyber768::decapsulate(&ct, &sk.0);
-            let mut d = GenericArray::default();
-            d.as_mut_slice().clone_from_slice(ss.as_bytes());
-            d
-        }
-    }
-}
-use self::pq::{PqPublicKeyCompressed, PqCipherText, PqPublicKey, PqSecretKey};
+use super::post_quantum::{PqPublicKeyCompressed, PqCipherText, PqPublicKey, PqSecretKey};
 
 pub type Noise = (sha3::Sha3_512, byteorder::LittleEndian, chacha20poly1305::ChaCha20Poly1305);
 
 pub type CipherM = Cipher<Noise, PhantomData<Noise>>;
 
-pub type CompressedPoint = GenericArray<u8, <EdwardsPoint as Curve>::CompressedLength>;
+type RawData<C> = Concat<GenericArray<u8, <C as LineValid>::Length>, Tag<Noise>>;
 
-pub type First = Concat<Concat<CompressedPoint, PqPublicKeyCompressed>, Tag<Noise>>;
+type PublicKeyCompressed = GenericArray<u8, <EdwardsPoint as Curve>::CompressedLength>;
 
-pub type Second = Concat<Concat<CompressedPoint, PqCipherText>, Tag<Noise>>;
+pub type First = Concat<Concat<PublicKeyCompressed, PqPublicKeyCompressed>, Tag<Noise>>;
 
-pub type Third = Concat<Concat<Concat<CompressedPoint, PqCipherText>, Tag<Noise>>, Tag<Noise>>;
+pub type Second = Concat<Concat<PublicKeyCompressed, PqCipherText>, Tag<Noise>>;
+
+pub type Third = Concat<RawData<Concat<PublicKeyCompressed, PqCipherText>>, Tag<Noise>>;
 
 pub fn key_pair<R>(rng: &mut R) -> (Scalar, EdwardsPoint)
 where
@@ -182,7 +120,7 @@ pub fn receive_two(
     let pq_ephemeral_ss = PqPublicKey::decapsulate(&pq_ephemeral, &pq_ephemeral_ct);
 
     let this_pk = Curve::compress(&EdwardsPoint::base().exp_ec(&sk));
-    let mut pk_tag = GenericArray::default();
+    let mut tag_ = GenericArray::default();
 
     let (pq_ss, pq_ct) = peer_pq_pk.encapsulate();
 
@@ -195,14 +133,14 @@ pub fn receive_two(
         .decrypt(&mut [], tag)
         .map_err(|()| HandshakeError::BadMac)?
         .encrypt(to_encrypt.as_mut())
-        .destruct(|t| pk_tag = t)
+        .destruct(|t| tag_ = t)
         .mix_shared_secret(&Curve::compress(&peer_ephemeral_pk.exp_ec(&sk)))
         .mix_shared_secret(&pq_ss)
         .encrypt(payload)
         .destruct(|t| tag = t)
         .finish();
 
-    Ok((cipher, Concat(Concat(Concat::clone_array(&to_encrypt), pk_tag), tag)))
+    Ok((cipher, Concat(Concat(to_encrypt, tag_), tag)))
 }
 
 pub fn receive_three(
@@ -212,13 +150,12 @@ pub fn receive_three(
     msg: Third,
     payload: &mut [u8],
 ) -> Result<(CipherM, EdwardsPoint), HandshakeError> {
-    let Concat(Concat(Concat(peer_ephemeral_pk_compressed_encrypted, pq_ct_encrypted), pk_tag), tag) = msg;
+    let Concat(Concat(mut to_decrypt, tag_), tag) = msg;
     let peer_pk;
-    let peer_ephemeral_pk_compressed_pq_ct: Concat<_, PqCipherText>;
+    let peer_ephemeral_pk_compressed_pq_ct: Concat<PublicKeyCompressed, PqCipherText>;
 
-    let mut to_decrypt = Concat(peer_ephemeral_pk_compressed_encrypted, pq_ct_encrypted).clone_line();
     let cipher = state
-        .decrypt(to_decrypt.as_mut(), pk_tag)
+        .decrypt(to_decrypt.as_mut(), tag_)
         .map_err(|()| HandshakeError::BadMac)?
         .mix_shared_secret({
             peer_ephemeral_pk_compressed_pq_ct = Concat::clone_array(&to_decrypt);
