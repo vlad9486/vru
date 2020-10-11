@@ -156,32 +156,16 @@ impl<S, M> HasMessage<S, M> {
     }
 }
 
-pub trait AppendMessage
-where
-    Self: Sized,
-{
-    fn give_message<M>(self, message: M) -> HasMessage<Self, M>;
-}
-
-impl<S> AppendMessage for S {
-    fn give_message<M>(self, message: M) -> HasMessage<Self, M> {
-        HasMessage {
-            state: self,
-            message: message,
-        }
-    }
-}
-
 pub struct State {
     symmetric_state: SymmetricState<Noise, ChainingKey<Noise>>,
 }
 
-pub struct StateI {
+pub struct StateEphemeral {
     symmetric_state: SymmetricState<Noise, Key<Noise, typenum::U1>>,
     e_sk: SecretKey,
 }
 
-pub struct StateF {
+pub struct StateFinal {
     symmetric_state: SymmetricState<Noise, Key<Noise, typenum::U1>>,
 }
 
@@ -207,7 +191,11 @@ impl State {
         }
     }
 
-    pub fn generate<R>(self, rng: &mut R, peer_s_pk: &PublicKey) -> HasMessage<StateI, Message0>
+    pub fn generate<R>(
+        self,
+        rng: &mut R,
+        peer_s_pk: &PublicKey,
+    ) -> HasMessage<StateEphemeral, Message0>
     where
         R: rand::Rng,
     {
@@ -224,30 +212,29 @@ impl State {
                     .encrypt(&mut [])
                     .destruct(|t| tag = t);
 
-                StateI {
-                    symmetric_state: symmetric_state,
-                    e_sk: e_sk,
+                HasMessage {
+                    state: StateEphemeral {
+                        symmetric_state: symmetric_state,
+                        e_sk: e_sk,
+                    },
+                    message: Concat(e_pk_c, tag),
                 }
-                .give_message(Concat(e_pk_c, tag))
             },
         }
     }
-}
 
-impl HasMessage<State, Message0> {
     pub fn consume<R>(
         self,
+        message: Message0,
         rng: &mut R,
         s_sk: &SecretKey,
-    ) -> Result<HasMessage<StateI, Message1>, ()>
+    ) -> Result<HasMessage<StateEphemeral, Message1>, ()>
     where
         R: rand::Rng,
     {
+        let Concat(peer_e_pk_c, mut tag) = message;
         match self {
-            HasMessage {
-                state: State { symmetric_state },
-                message: Concat(peer_e_pk_c, mut tag),
-            } => {
+            State { symmetric_state } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
                 let peer_e_pq = peer_e_pk.lattice.encapsulate();
 
@@ -267,7 +254,7 @@ impl HasMessage<State, Message0> {
                     .destruct(|t| tag = t);
 
                 Ok(HasMessage {
-                    state: StateI {
+                    state: StateEphemeral {
                         symmetric_state: symmetric_state,
                         e_sk: e_sk,
                     },
@@ -278,25 +265,23 @@ impl HasMessage<State, Message0> {
     }
 }
 
-impl HasMessage<StateI, Message1> {
+impl StateEphemeral {
     pub fn generate<R>(
         self,
+        message: Message1,
         rng: &mut R,
         s_sk: &SecretKey,
         s_pk: &PublicKey,
         peer_s_pk: &PublicKey,
-    ) -> Result<HasMessage<StateF, Message2>, ()>
+    ) -> Result<HasMessage<StateFinal, Message2>, ()>
     where
         R: rand::Rng,
     {
+        let Concat(Concat(peer_e_pk_c, e_ct), mut tag) = message;
         match self {
-            HasMessage {
-                state:
-                    StateI {
-                        symmetric_state,
-                        e_sk,
-                    },
-                message: Concat(Concat(peer_e_pk_c, e_ct), mut tag),
+            StateEphemeral {
+                symmetric_state,
+                e_sk,
             } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
                 let e_ss = PkLattice::decapsulate(&e_sk.lattice, &e_ct);
@@ -320,7 +305,7 @@ impl HasMessage<StateI, Message1> {
                     .destruct(|t| tag = t);
 
                 Ok(HasMessage {
-                    state: StateF {
+                    state: StateFinal {
                         symmetric_state: symmetric_state,
                     },
                     message: Concat(Concat(encrypted_s_pk, encrypted_peer_e_ct), tag),
@@ -328,21 +313,17 @@ impl HasMessage<StateI, Message1> {
             },
         }
     }
-}
 
-impl HasMessage<StateI, Message2> {
     pub fn consume(
         self,
+        message: Message2,
         s_sk: &SecretKey,
-    ) -> Result<(HasMessage<StateF, Message3>, PublicKey), ()> {
+    ) -> Result<(HasMessage<StateFinal, Message3>, PublicKey), ()> {
+        let Concat(Concat(mut encrypted_peer_s_pk, mut encrypted_e_ct), mut tag) = message;
         match self {
-            HasMessage {
-                state:
-                    StateI {
-                        symmetric_state,
-                        e_sk,
-                    },
-                message: Concat(Concat(mut encrypted_peer_s_pk, mut encrypted_e_ct), mut tag),
+            StateEphemeral {
+                symmetric_state,
+                e_sk,
             } => {
                 let peer_s_pk_c;
                 let peer_s_pk;
@@ -375,7 +356,7 @@ impl HasMessage<StateI, Message2> {
 
                 Ok((
                     HasMessage {
-                        state: StateF {
+                        state: StateFinal {
                             symmetric_state: symmetric_state,
                         },
                         message: Concat(encrypted_peer_s_ct, tag),
@@ -387,9 +368,10 @@ impl HasMessage<StateI, Message2> {
     }
 }
 
-impl HasMessage<StateF, Message3> {
+impl StateFinal {
     pub fn generate<R>(
         self,
+        message: Message3,
         s_sk: &SecretKey,
         s_peer_pk: &PublicKey,
         payload: &mut [u8],
@@ -397,11 +379,9 @@ impl HasMessage<StateF, Message3> {
     where
         R: Rotor<Noise>,
     {
+        let Concat(mut encrypted_s_ct, mut tag) = message;
         match self {
-            HasMessage {
-                state: StateF { symmetric_state },
-                message: Concat(mut encrypted_s_ct, mut tag),
-            } => {
+            StateFinal { symmetric_state } => {
                 let peer_s_pq = s_peer_pk.lattice.encapsulate();
                 let mut encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
                 let cipher = symmetric_state
@@ -409,7 +389,7 @@ impl HasMessage<StateF, Message3> {
                     .mix_shared_secret({
                         PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.data).as_ref()
                     })
-                    .decrypt(payload, tag)?
+                    .decrypt(&mut [], tag)?
                     .encrypt(encrypted_peer_s_ct.data.as_mut())
                     .destruct(|t| encrypted_peer_s_ct.tag = t)
                     .mix_shared_secret(peer_s_pq.ss.as_ref())
@@ -424,28 +404,70 @@ impl HasMessage<StateF, Message3> {
             },
         }
     }
-}
 
-impl HasMessage<StateF, Message4> {
-    pub fn consume<R>(self, s_sk: &SecretKey, payload: &mut [u8]) -> Result<Cipher<Noise, R>, ()>
+    pub fn consume<R>(
+        self,
+        message: Message4,
+        s_sk: &SecretKey,
+        payload: &mut [u8],
+    ) -> Result<Cipher<Noise, R>, ()>
     where
         R: Rotor<Noise>,
     {
+        let Concat(mut encrypted_s_ct, tag) = message;
         match self {
-            HasMessage {
-                state: StateF { symmetric_state },
-                message: Concat(mut encrypted_s_ct, tag),
-            } => {
+            StateFinal { symmetric_state } => {
                 let cipher = symmetric_state
                     .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
                     .mix_shared_secret({
                         PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.data).as_ref()
                     })
                     .decrypt(payload, tag)?
-                    .finish();
+                    .finish()
+                    .swap();
 
                 Ok(cipher)
             },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::marker::PhantomData;
+    use super::{Noise, key_pair, State, HasMessage};
+
+    #[test]
+    fn handshake() {
+        let mut rng = rand::thread_rng();
+
+        let (i_sk, i_pk) = key_pair(&mut rng);
+        let (r_sk, r_pk) = key_pair(&mut rng);
+
+        let orig = rand::random::<[u8; 32]>();
+        let mut payload = orig.clone();
+
+        type Rotor = PhantomData<Noise>;
+
+        let i_state = State::new(&r_pk);
+        let r_state = State::new(&r_pk);
+
+        let HasMessage { state: i_state, message } = i_state.generate(&mut rng, &r_pk);
+        let HasMessage { state: r_state, message } = r_state.consume(message, &mut rng, &r_sk).unwrap();
+        let HasMessage { state: i_state, message } = i_state.generate(message, &mut rng, &i_sk, &i_pk, &r_pk).unwrap();
+        let (HasMessage { state: r_state, message }, _pk) = r_state.consume(message, &r_sk).unwrap();
+        let HasMessage { state: mut i_cipher, message } = i_state.generate::<Rotor>(message, &i_sk, &r_pk, payload.as_mut()).unwrap();
+        let mut r_cipher = r_state.consume::<Rotor>(message, &r_sk, payload.as_mut()).unwrap();
+
+        assert_eq!(orig, payload);
+        //assert_eq!(i_pk, pk.as_ref());
+
+        for _ in 0..16 {
+            let orig = rand::random::<[u8; 32]>();
+            let mut a = orig.clone();
+            let tag = r_cipher.encrypt(b"vru", a.as_mut());
+            i_cipher.decrypt(b"vru", a.as_mut(), &tag).unwrap();
+            assert_eq!(orig, a);
         }
     }
 }
