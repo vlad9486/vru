@@ -68,6 +68,11 @@ pub type CipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U64>>::Ou
 
 pub type SharedSecret = GenericArray<u8, typenum::U32>;
 
+pub struct Encapsulated {
+    pub ss: SharedSecret,
+    pub ct: CipherText,
+}
+
 impl PkLattice {
     pub fn compress<R>(&self, rng: &mut R) -> PkLatticeCompressed
     where
@@ -92,12 +97,12 @@ impl PkLattice {
         (SkLattice(sk), PkLattice(pk))
     }
 
-    pub fn encapsulate(&self) -> (SharedSecret, CipherText) {
+    pub fn encapsulate(&self) -> Encapsulated {
         let (ss, ct) = kyber768::encapsulate(&self.0);
-        (
-            GenericArray::from_slice(ss.as_bytes()).clone(),
-            GenericArray::from_slice(ct.as_bytes()).clone(),
-        )
+        Encapsulated {
+            ss: GenericArray::from_slice(ss.as_bytes()).clone(),
+            ct: GenericArray::from_slice(ct.as_bytes()).clone(),
+        }
     }
 
     pub fn decapsulate(sk: &SkLattice, ct: &CipherText) -> SharedSecret {

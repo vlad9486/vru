@@ -1,6 +1,6 @@
 use std::ops::Add;
 use curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar};
-use vru_noise::{SymmetricState, ChainingKey, Key, Tag};
+use vru_noise::{SymmetricState, Cipher, Rotor, ChainingKey, Key, Tag};
 use rac::{
     LineValid, Line, Concat, Curve,
     generic_array::{GenericArray, sequence::GenericSequence, typenum},
@@ -86,8 +86,20 @@ pub struct Encrypted<T>
 where
     T: Line,
 {
-    data: T,
+    data: GenericArray<u8, T::Length>,
     tag: Tag<Noise>,
+}
+
+impl<T> Encrypted<T>
+where
+    T: Line,
+{
+    pub fn new(v: T) -> Self {
+        Encrypted {
+            data: v.clone_line(),
+            tag: GenericArray::default(),
+        }
+    }
 }
 
 impl<T> LineValid for Encrypted<T>
@@ -99,7 +111,7 @@ where
 
     fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
         LineValid::try_clone_array(a).map(|Concat(data, tag)| Encrypted {
-            data: T::clone_array(&data),
+            data: data,
             tag: tag,
         })
     }
@@ -169,15 +181,21 @@ pub struct StateI {
     e_sk: SecretKey,
 }
 
+pub struct StateF {
+    symmetric_state: SymmetricState<Noise, Key<Noise, typenum::U1>>,
+}
+
+// generate: State -> StateI, Message0
 type Message0 = Concat<PublicKeyCompressed, Tag<Noise>>;
-
+// consume: State, Message0 -> StateI, Message1
 type Message1 = Concat<Concat<PublicKeyCompressed, CipherText>, Tag<Noise>>;
-
+// generate: StateI, Message1 -> StateF, Message2
 type Message2 = Concat<Concat<Encrypted<PublicKeyCompressed>, Encrypted<CipherText>>, Tag<Noise>>;
-
+// consume: StateI, Message2 -> StateF, Message3, PublicKey
 type Message3 = Concat<Encrypted<CipherText>, Tag<Noise>>;
-
+// generate: StateF, Message3 -> Cipher, Message4
 type Message4 = Concat<Encrypted<CipherText>, Tag<Noise>>;
+// consume: StateF, Message2 -> Cipher
 
 impl State {
     pub fn new(s_pk: &PublicKey) -> Self {
@@ -231,7 +249,7 @@ impl HasMessage<State, Message0> {
                 message: Concat(peer_e_pk_c, mut tag),
             } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
-                let (peer_e_ss, peer_e_ct) = peer_e_pk.lattice.encapsulate();
+                let peer_e_pq = peer_e_pk.lattice.encapsulate();
 
                 let (e_sk, e_pk) = key_pair(rng);
                 let e_pk_c = compress(&e_pk, rng);
@@ -244,7 +262,7 @@ impl HasMessage<State, Message0> {
                     .mix_hash(&e_pk_c.elliptic)
                     .mix_hash(&e_pk.lattice.as_ref())
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
-                    .mix_shared_secret(&peer_e_ss)
+                    .mix_shared_secret(&peer_e_pq.ss)
                     .encrypt(&mut [])
                     .destruct(|t| tag = t);
 
@@ -253,8 +271,180 @@ impl HasMessage<State, Message0> {
                         symmetric_state: symmetric_state,
                         e_sk: e_sk,
                     },
-                    message: Concat(Concat(e_pk_c, peer_e_ct), tag),
+                    message: Concat(Concat(e_pk_c, peer_e_pq.ct), tag),
                 })
+            },
+        }
+    }
+}
+
+impl HasMessage<StateI, Message1> {
+    pub fn generate<R>(
+        self,
+        rng: &mut R,
+        s_sk: &SecretKey,
+        s_pk: &PublicKey,
+        peer_s_pk: &PublicKey,
+    ) -> Result<HasMessage<StateF, Message2>, ()>
+    where
+        R: rand::Rng,
+    {
+        match self {
+            HasMessage {
+                state:
+                    StateI {
+                        symmetric_state,
+                        e_sk,
+                    },
+                message: Concat(Concat(peer_e_pk_c, e_ct), mut tag),
+            } => {
+                let peer_e_pk = decompress(&peer_e_pk_c);
+                let e_ss = PkLattice::decapsulate(&e_sk.lattice, &e_ct);
+                let mut encrypted_s_pk = Encrypted::new(compress(&s_pk, rng));
+                let peer_e_pq = peer_s_pk.lattice.encapsulate();
+                let mut encrypted_peer_e_ct = Encrypted::new(peer_e_pq.ct);
+
+                let symmetric_state = symmetric_state
+                    .mix_hash(&peer_e_pk_c.elliptic)
+                    .mix_hash(&peer_e_pk.lattice.as_ref())
+                    .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
+                    .mix_shared_secret(&e_ss)
+                    .decrypt(&mut [], tag)?
+                    .encrypt(encrypted_s_pk.data.as_mut_slice())
+                    .destruct(|t| encrypted_s_pk.tag = t)
+                    .encrypt(encrypted_peer_e_ct.data.as_mut_slice())
+                    .destruct(|t| encrypted_peer_e_ct.tag = t)
+                    .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&s_sk.elliptic)))
+                    .mix_shared_secret(&peer_e_pq.ss)
+                    .encrypt(&mut [])
+                    .destruct(|t| tag = t);
+
+                Ok(HasMessage {
+                    state: StateF {
+                        symmetric_state: symmetric_state,
+                    },
+                    message: Concat(Concat(encrypted_s_pk, encrypted_peer_e_ct), tag),
+                })
+            },
+        }
+    }
+}
+
+impl HasMessage<StateI, Message2> {
+    pub fn consume(
+        self,
+        s_sk: &SecretKey,
+    ) -> Result<(HasMessage<StateF, Message3>, PublicKey), ()> {
+        match self {
+            HasMessage {
+                state:
+                    StateI {
+                        symmetric_state,
+                        e_sk,
+                    },
+                message: Concat(Concat(mut encrypted_peer_s_pk, mut encrypted_e_ct), mut tag),
+            } => {
+                let peer_s_pk_c;
+                let peer_s_pk;
+                let mut encrypted_peer_s_ct;
+                let peer_s_ss;
+
+                let symmetric_state = symmetric_state
+                    .decrypt(
+                        encrypted_peer_s_pk.data.as_mut_slice(),
+                        encrypted_peer_s_pk.tag,
+                    )?
+                    .decrypt(encrypted_e_ct.data.as_mut_slice(), encrypted_e_ct.tag)?
+                    .mix_shared_secret({
+                        peer_s_pk_c = Line::clone_array(&encrypted_peer_s_pk.data);
+                        peer_s_pk = decompress(&peer_s_pk_c);
+                        let peer_s_pq = peer_s_pk.lattice.encapsulate();
+                        encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
+                        peer_s_ss = peer_s_pq.ss;
+                        &Curve::compress(&peer_s_pk.elliptic.exp_ec(&e_sk.elliptic))
+                    })
+                    .mix_shared_secret({
+                        PkLattice::decapsulate(&s_sk.lattice, &encrypted_e_ct.data).as_ref()
+                    })
+                    .decrypt(&mut [], tag)?
+                    .encrypt(encrypted_peer_s_ct.data.as_mut())
+                    .destruct(|t| encrypted_peer_s_ct.tag = t)
+                    .mix_shared_secret(&peer_s_ss)
+                    .encrypt(&mut [])
+                    .destruct(|t| tag = t);
+
+                Ok((
+                    HasMessage {
+                        state: StateF {
+                            symmetric_state: symmetric_state,
+                        },
+                        message: Concat(encrypted_peer_s_ct, tag),
+                    },
+                    peer_s_pk,
+                ))
+            },
+        }
+    }
+}
+
+impl HasMessage<StateF, Message3> {
+    pub fn generate<R>(
+        self,
+        s_sk: &SecretKey,
+        s_peer_pk: &PublicKey,
+        payload: &mut [u8],
+    ) -> Result<HasMessage<Cipher<Noise, R>, Message4>, ()>
+    where
+        R: Rotor<Noise>,
+    {
+        match self {
+            HasMessage {
+                state: StateF { symmetric_state },
+                message: Concat(mut encrypted_s_ct, mut tag),
+            } => {
+                let peer_s_pq = s_peer_pk.lattice.encapsulate();
+                let mut encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
+                let cipher = symmetric_state
+                    .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
+                    .mix_shared_secret({
+                        PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.data).as_ref()
+                    })
+                    .decrypt(payload, tag)?
+                    .encrypt(encrypted_peer_s_ct.data.as_mut())
+                    .destruct(|t| encrypted_peer_s_ct.tag = t)
+                    .mix_shared_secret(peer_s_pq.ss.as_ref())
+                    .encrypt(payload)
+                    .destruct(|t| tag = t)
+                    .finish();
+
+                Ok(HasMessage {
+                    state: cipher,
+                    message: Concat(encrypted_peer_s_ct, tag),
+                })
+            },
+        }
+    }
+}
+
+impl HasMessage<StateF, Message4> {
+    pub fn consume<R>(self, s_sk: &SecretKey, payload: &mut [u8]) -> Result<Cipher<Noise, R>, ()>
+    where
+        R: Rotor<Noise>,
+    {
+        match self {
+            HasMessage {
+                state: StateF { symmetric_state },
+                message: Concat(mut encrypted_s_ct, tag),
+            } => {
+                let cipher = symmetric_state
+                    .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
+                    .mix_shared_secret({
+                        PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.data).as_ref()
+                    })
+                    .decrypt(payload, tag)?
+                    .finish();
+
+                Ok(cipher)
             },
         }
     }
