@@ -64,9 +64,9 @@ pub type PkLatticeCl = <typenum::U1024 as Add<typenum::U132>>::Output;
 
 pub type PkLatticeCompressed = GenericArray<u8, PkLatticeCl>;
 
-pub type PqCipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U64>>::Output>;
+pub type CipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U64>>::Output>;
 
-pub type PqSharedSecret = GenericArray<u8, typenum::U32>;
+pub type SharedSecret = GenericArray<u8, typenum::U32>;
 
 impl PkLattice {
     pub fn compress<R>(&self, rng: &mut R) -> PkLatticeCompressed
@@ -92,7 +92,7 @@ impl PkLattice {
         (SkLattice(sk), PkLattice(pk))
     }
 
-    pub fn encapsulate(&self) -> (PqSharedSecret, PqCipherText) {
+    pub fn encapsulate(&self) -> (SharedSecret, CipherText) {
         let (ss, ct) = kyber768::encapsulate(&self.0);
         (
             GenericArray::from_slice(ss.as_bytes()).clone(),
@@ -100,7 +100,7 @@ impl PkLattice {
         )
     }
 
-    pub fn decapsulate(sk: &SkLattice, ct: &PqCipherText) -> PqSharedSecret {
+    pub fn decapsulate(sk: &SkLattice, ct: &CipherText) -> SharedSecret {
         let ct = kyber768::Ciphertext::from_bytes(ct.as_ref()).unwrap();
         let ss = kyber768::decapsulate(&ct, &sk.0);
         GenericArray::from_slice(ss.as_bytes()).clone()
