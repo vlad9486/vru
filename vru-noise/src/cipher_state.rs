@@ -36,7 +36,7 @@ where
 }
 
 #[derive(Clone)]
-struct Unidirectional<C, R>
+pub struct Unidirectional<C, R>
 where
     C: Config,
     R: Rotor<C>,
@@ -66,7 +66,7 @@ where
         }
     }
 
-    fn encrypt(&mut self, associated_data: &[u8], buffer: &mut [u8]) -> Tag<C> {
+    pub fn encrypt(&mut self, associated_data: &[u8], buffer: &mut [u8]) -> Tag<C> {
         let mut nonce_array = GenericArray::default();
         C::ByteOrder::write_u64(&mut nonce_array[4..], self.nonce);
         self.key
@@ -78,7 +78,7 @@ where
             .unwrap()
     }
 
-    fn decrypt(
+    pub fn decrypt(
         &mut self,
         associated_data: &[u8],
         buffer: &mut [u8],
@@ -116,8 +116,8 @@ where
     C: Config,
     R: Rotor<C>,
 {
-    send: Unidirectional<C, R>,
-    receive: Unidirectional<C, R>,
+    pub send: Unidirectional<C, R>,
+    pub receive: Unidirectional<C, R>,
 }
 
 impl<C, R> Cipher<C, R>

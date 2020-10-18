@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'vru'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=vru",
+                    "--package=vru-node"
+                ],
+                "filter": {
+                    "name": "vru",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }    
+    ]
+}

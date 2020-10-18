@@ -1,4 +1,4 @@
-use generic_array::{GenericArray, ArrayLength};
+use generic_array::{GenericArray, ArrayLength, typenum};
 
 pub trait LineValid
 where
@@ -38,5 +38,23 @@ where
 {
     fn clone_array(a: &GenericArray<u8, Self::Length>) -> Self {
         a.clone()
+    }
+}
+
+impl LineValid for [u8; 0] {
+    type Length = typenum::U0;
+
+    fn try_clone_array(_a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+        Ok([])
+    }
+
+    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+        GenericArray::default()
+    }
+}
+
+impl Line for [u8; 0] {
+    fn clone_array(_a: &GenericArray<u8, Self::Length>) -> Self {
+        []
     }
 }

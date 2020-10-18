@@ -1,0 +1,25 @@
+[package]
+name = "vru-node"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[[bin]]
+name = "vru"
+path = "src/bin/vru.rs"
+
+[dependencies]
+rac = { path = "../rac" }
+vru-transport = { path = "../vru-transport" }
+rand = { version = "0.7" }
+tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream"] }
+futures = { version = "0.3" }
+serde = { version = "1.0", features = ["derive"] }
+
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.2" }
+
+pqcrypto-dilithium = { version = "0.3" }
+
+structopt = { version = "0.3" }
