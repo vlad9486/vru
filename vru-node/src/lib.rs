@@ -12,4 +12,4 @@ mod process;
 pub use self::process::LocalCommand;
 
 mod node;
-pub use self::node::{Node, Command};
+pub use self::node::{run, Command};

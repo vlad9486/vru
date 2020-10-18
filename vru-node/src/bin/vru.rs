@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
-use vru_node::{Node, Command, LocalCommand};
+use vru_node::{run, Command, LocalCommand};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::io::{self, AsyncBufReadExt};
+use tokio::stream::StreamExt;
 
 #[derive(StructOpt)]
 struct Opts {
@@ -24,56 +25,44 @@ async fn main() {
     let pi = PublicIdentity::new(&pk);
     tracing::info!("identity: {}", pi);
 
-    /*let rt = tokio::runtime::Builder::new_multi_thread();
-    rt.enable_all()
-        .build()
-        .unwrap()
-        .spawn(async {
-
-        });*/
-
-    let node = Node::run(sk, pk);
-    let mut reader = io::BufReader::new(io::stdin());
-    loop {
-        let mut buffer = String::new();
-        reader.read_line(&mut buffer).await.unwrap();
-
-        let mut words = buffer.split_whitespace();
-        let command = words.next().unwrap();
-        match command {
-            "quit" => {
-                node.shutdown();
-                break;
-            },
-            "listen" => {
-                let address = words.next().unwrap().parse().unwrap();
-                node.send(Command::Listen {
-                    local_host: address,
-                })
-                .ok()
-                .unwrap();
-            },
-            "connect" => {
-                let address = words.next().unwrap().parse().unwrap();
-                let peer_pi = words.next().unwrap().parse().unwrap();
-                node.send(Command::Connect {
-                    remote_host: address,
-                    remote_pi: peer_pi,
-                })
-                .ok()
-                .unwrap();
-            },
-            "message" => {
-                let peer_pi = words.next().unwrap().parse().unwrap();
-                let message = words.next().unwrap().to_string();
-                node.send(Command::Local {
-                    command: LocalCommand::Message(message),
-                    peer_pi: peer_pi,
-                })
-                .ok()
-                .unwrap();
-            },
-            _ => println!("bad command"),
-        }
-    }
+    let control = io::BufReader::new(io::stdin())
+        .lines()
+        .take_while(|l| match &l {
+            &Ok(ref s) => s != "quit",
+            &Err(_) => true,
+        })
+        .filter_map(|line| {
+            let line = line.ok()?;
+            let mut words = line.split_whitespace();
+            let command = words.next()?;
+            match command {
+                "listen" => {
+                    let address = words.next()?.parse().ok()?;
+                    Some(Command::Listen {
+                        local_host: address,
+                    })
+                },
+                "connect" => {
+                    let address = words.next()?.parse().ok()?;
+                    let peer_pi = words.next()?.parse().ok()?;
+                    Some(Command::Connect {
+                        remote_host: address,
+                        remote_pi: peer_pi,
+                    })
+                },
+                "message" => {
+                    let peer_pi = words.next()?.parse().ok()?;
+                    let message = words.next()?.to_string();
+                    Some(Command::Local {
+                        command: LocalCommand::Message(message),
+                        peer_pi: peer_pi,
+                    })
+                },
+                _ => {
+                    println!("bad command");
+                    None
+                },
+            }
+        });
+    tokio::spawn(async { run(sk, pk, control).await }).await.unwrap();
 }
