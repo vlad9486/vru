@@ -1,9 +1,12 @@
 use std::{convert::TryFrom, ops::Add};
-use generic_array::{GenericArray, typenum};
+use rac::{
+    LineValid, Line,
+    generic_array::{GenericArray, typenum},
+};
 use num_traits::ToPrimitive;
 use num_bigint::{ToBigUint, BigUint};
-use pqcrypto_kyber::kyber768;
 use pqcrypto_traits::kem::{PublicKey as _, SharedSecret as _, Ciphertext as _};
+use pqcrypto_kyber::kyber768;
 
 const KYBER_Q: u16 = 3329;
 
@@ -56,8 +59,32 @@ fn unpack_kyber768(packed: &[u8; KYBER768_PACKED_SIZE]) -> [u8; 768 / 2 * 3 + 32
     pk
 }
 
+#[derive(Clone)]
 pub struct PkLattice(kyber768::PublicKey);
 
+impl LineValid for PkLattice {
+    type Length = <typenum::U1024 as Add<typenum::U160>>::Output;
+
+    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+        Ok(PkLattice(
+            kyber768::PublicKey::from_bytes(a.as_slice()).unwrap(),
+        ))
+    }
+
+    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+        let mut r = GenericArray::default();
+        r.as_mut_slice().clone_from_slice(self.as_ref());
+        r
+    }
+}
+
+impl Line for PkLattice {
+    fn clone_array(a: &GenericArray<u8, Self::Length>) -> Self {
+        Self::try_clone_array(a).unwrap()
+    }
+}
+
+#[derive(Clone)]
 pub struct SkLattice(kyber768::SecretKey);
 
 pub type PkLatticeCl = <typenum::U1024 as Add<typenum::U132>>::Output;
@@ -74,6 +101,12 @@ pub struct Encapsulated {
 }
 
 impl PkLattice {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
+        kyber768::PublicKey::from_bytes(bytes)
+            .map(PkLattice)
+            .map_err(|_| ())
+    }
+
     pub fn compress<R>(&self, rng: &mut R) -> PkLatticeCompressed
     where
         R: rand::Rng,

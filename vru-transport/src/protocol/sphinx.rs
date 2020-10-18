@@ -3,7 +3,7 @@ use curve25519_dalek::edwards::EdwardsPoint;
 use sha2::Sha256;
 use chacha20::ChaCha20;
 use hmac::Hmac;
-use generic_array::{GenericArray, typenum};
+use rac::generic_array::{GenericArray, typenum};
 
 pub type Sphinx = (EdwardsPoint, Hmac<Sha256>, Sha256, ChaCha20);
 
