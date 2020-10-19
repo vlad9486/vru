@@ -1,9 +1,9 @@
-use generic_array::{GenericArray, ArrayLength};
+use rac::generic_array::{GenericArray, ArrayLength};
 use rac::{LineValid, Curve};
 use cryptography::{
     digest::{Update, FixedOutput},
     mac::{Mac, NewMac},
-    stream_cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
+    cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
 };
 
 pub type SharedSecret<A> = GenericArray<u8, <<A as Curve>::Scalar as LineValid>::Length>;

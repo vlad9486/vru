@@ -1,4 +1,4 @@
-use generic_array::GenericArray;
+use rac::generic_array::GenericArray;
 use secp256k1::{PublicKey, SecretKey};
 use std::{vec::Vec, string::String, dbg};
 use super::Processed;
@@ -19,7 +19,7 @@ use self::packet::{FullSphinx, FullPacket};
 #[test]
 fn packet() {
     use rac::Curve;
-    use generic_array::typenum::{U33, U20};
+    use rac::generic_array::typenum::{U33, U20};
     use tirse::{DefaultBinarySerializer, WriteWrapper};
     use serde::Serialize;
     use super::GlobalData;
@@ -109,7 +109,7 @@ fn packet() {
 
 #[test]
 fn path() {
-    use generic_array::{
+    use rac::generic_array::{
         sequence::GenericSequence,
         typenum::{U19, U5},
     };
@@ -127,7 +127,7 @@ fn path() {
     struct Message([u8; MESSAGE_LENGTH]);
 
     impl Message {
-        pub fn random() -> Self {
+        pub fn new() -> Self {
             let mut array = [0; MESSAGE_LENGTH];
             for i in 0..MESSAGE_LENGTH {
                 array[i] = rand::random();
@@ -191,7 +191,7 @@ fn path() {
         .map(|_| GenericArray::generate(|_| rand::random::<u8>()))
         .collect::<Vec<_>>();
 
-    let message = Message::random();
+    let message = Message::new();
 
     let secret = SecretKey::new(&mut rand::thread_rng());
     let (data, public_key) = GlobalData::new::<_, FullSphinx>(&secret, path.into_iter());

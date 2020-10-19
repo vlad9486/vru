@@ -8,7 +8,7 @@ description = "Noise handshake protocol implemented in Rust"
 repository = "https://github.com/vlad9486/vru"
 
 [dependencies.cryptography]
-version = "0.3"
+version = "0.5"
 features = ["digest", "aead"]
 
 [dependencies.hkdf]
@@ -24,7 +24,7 @@ version = "0.14"
 version = "0.4"
 
 [dev-dependencies.rac]
-version = "1.3"
+path = "../rac"
 features = ["secp256k1", "curve25519-dalek"]
 
 [dev-dependencies.serde]
@@ -41,7 +41,7 @@ version = "3.0"
 version = "0.9"
 
 [dev-dependencies.aes-gcm]
-version = "0.6"
+version = "0.8"
 features = ["zeroize"]
 
 [features]

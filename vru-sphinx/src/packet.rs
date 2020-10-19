@@ -1,8 +1,8 @@
 use rac::{LineValid, Curve};
-use generic_array::{GenericArray, ArrayLength};
+use rac::generic_array::{GenericArray, ArrayLength};
 use cryptography::{
     digest::{Update, FixedOutput},
-    stream_cipher::{SyncStreamCipher, SyncStreamCipherSeek},
+    cipher::{SyncStreamCipher, SyncStreamCipherSeek},
 };
 use super::path::{PayloadHmac, Path};
 use super::sphinx::{Sphinx, SharedSecret};
@@ -165,7 +165,7 @@ where
         for i in 0..length {
             let mut s = B::rho(&shared_secrets[i]);
             let size = PayloadHmac::<L, B::MacLength>::size();
-            s.seek((size * (Path::<L, B::MacLength, N>::size() - i)) as _);
+            s.seek((size * (Path::<L, B::MacLength, N>::size() - i)) as usize);
             let start = Path::<L, B::MacLength, N>::size() - length;
             routing_info.as_mut()[start..(start + i + 1)]
                 .iter_mut()
@@ -264,7 +264,7 @@ where
 
 #[cfg(feature = "serde")]
 mod serde_m {
-    use generic_array::{GenericArray, ArrayLength};
+    use rac::generic_array::{GenericArray, ArrayLength};
     use serde::{Serialize, Serializer, Deserialize, Deserializer};
     use core::{marker::PhantomData, fmt};
     use super::{AuthenticatedMessage, Path, PayloadHmac, Sphinx};
@@ -359,7 +359,7 @@ mod serde_m {
 }
 
 mod implementations {
-    use generic_array::ArrayLength;
+    use rac::generic_array::ArrayLength;
     use rac::Curve;
     use core::fmt;
     use super::{AuthenticatedMessage, Sphinx, PayloadHmac, LocalData};

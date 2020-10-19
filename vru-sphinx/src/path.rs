@@ -1,5 +1,5 @@
-use generic_array::{GenericArray, ArrayLength};
-use cryptography::stream_cipher::SyncStreamCipher;
+use rac::generic_array::{GenericArray, ArrayLength};
+use cryptography::cipher::SyncStreamCipher;
 
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -164,7 +164,7 @@ where
 }
 
 mod implementations {
-    use generic_array::ArrayLength;
+    use rac::generic_array::ArrayLength;
     use core::fmt;
     use super::{PayloadHmac, Path};
 
