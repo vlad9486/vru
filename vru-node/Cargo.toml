@@ -13,7 +13,7 @@ path = "src/bin/vru.rs"
 rac = { path = "../rac" }
 vru-transport = { path = "../vru-transport" }
 rand = { version = "0.7" }
-tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream"] }
+tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream", "signal"] }
 futures = { version = "0.3" }
 serde = { version = "1.0", features = ["derive"] }
 

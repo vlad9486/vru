@@ -1,6 +1,6 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
 use vru_transport::protocol::{SecretKey, PublicKey, PublicIdentity};
-use tokio::{sync::mpsc, stream::{Stream, StreamExt}};
+use tokio::{sync::mpsc, stream::{Stream, StreamExt}, select, signal::ctrl_c};
 use super::{terminate, connection, process};
 
 pub enum Command {
@@ -17,15 +17,55 @@ pub enum Command {
     },
 }
 
-pub async fn run<S>(ake_sk: SecretKey, ake_pk: PublicKey, control: S)
+impl FromStr for Command {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut words = s.split_whitespace();
+        match words.next().ok_or(())? {
+            "listen" => {
+                let address = words.next().ok_or(())?.parse().map_err(|_| ())?;
+                Ok(Command::Listen {
+                    local_host: address,
+                })
+            },
+            "connect" => {
+                let address = words.next().ok_or(())?.parse().map_err(|_| ())?;
+                let peer_pi = words.next().ok_or(())?.parse().map_err(|_| ())?;
+                Ok(Command::Connect {
+                    remote_host: address,
+                    remote_pi: peer_pi,
+                })
+            },
+            "message" => {
+                let peer_pi = words.next().ok_or(())?.parse().map_err(|_| ())?;
+                let message = words.next().ok_or(())?.to_string();
+                Ok(Command::Local {
+                    command: process::LocalCommand::Message(message),
+                    peer_pi: peer_pi,
+                })
+            },
+            _ => Err(()),
+        }
+    }
+}
+
+pub async fn run<S>(ake_sk: SecretKey, ake_pk: PublicKey, mut control: S)
 where
-    S: Send + Unpin + Stream<Item = Command> + 'static,
+    S: Unpin + Stream<Item = Command>,
 {
-    let mut control = control;
+    //let mut control = breakable::b(control);
     let (c_tx, mut c_rx) = mpsc::unbounded_channel::<connection::Connection>();
     let mut connections = Vec::new();
     let (terminate_sender, mut trx) = terminate::channel();
-    while let Some(command) = control.next().await {
+    loop {
+        let command = select! {
+            command = control.next() => match command {
+                Some(command) => command,
+                None => break,
+            },
+            _ = ctrl_c() => break,
+        };
         while let Ok(connection) = c_rx.try_recv() {
             connections.push(connection);
         }
@@ -60,6 +100,5 @@ where
             },
         }
     }
-    tracing::info!("sending termination event");
     terminate_sender.terminate();
 }

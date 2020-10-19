@@ -56,13 +56,14 @@ impl Receiver {
     where
         F: Future<Output = T>,
     {
-        let f = f.fuse();
-        pin_mut!(f);
         let inner = poll_fn(|cx| self.inner.poll_unpin(cx)).fuse();
         pin_mut!(inner);
+        let f = f.fuse();
+        pin_mut!(f);
         match select(inner, f).await {
             Either::Left((_, f)) => {
                 let _ = f;
+                tracing::info!("propagating termination signal from {:#?} to {}", (self as *mut Self), self.items.len());
                 let items = std::mem::replace(&mut self.items, Vec::new());
                 for (sender, handle) in items {
                     sender.terminate();

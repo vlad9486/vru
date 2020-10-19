@@ -72,7 +72,10 @@ pub async fn process(
                     },
                 }
             },
-            Either::Left(None) => panic!(),
+            Either::Left(None) => {
+                tracing::info!("channel {:?} is broken be the peer", address);
+                break;
+            },
         }
     }
 }

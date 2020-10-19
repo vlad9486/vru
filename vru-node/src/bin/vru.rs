@@ -1,9 +1,11 @@
 use std::path::PathBuf;
 use structopt::StructOpt;
-use vru_node::{run, Command, LocalCommand};
+use vru_node::run;
 use vru_transport::protocol::{PublicKey, PublicIdentity};
-use tokio::io::{self, AsyncBufReadExt};
-use tokio::stream::StreamExt;
+use tokio::{
+    io::{self, AsyncBufReadExt},
+    stream::StreamExt,
+};
 
 #[derive(StructOpt)]
 struct Opts {
@@ -27,42 +29,6 @@ async fn main() {
 
     let control = io::BufReader::new(io::stdin())
         .lines()
-        .take_while(|l| match &l {
-            &Ok(ref s) => s != "quit",
-            &Err(_) => true,
-        })
-        .filter_map(|line| {
-            let line = line.ok()?;
-            let mut words = line.split_whitespace();
-            let command = words.next()?;
-            match command {
-                "listen" => {
-                    let address = words.next()?.parse().ok()?;
-                    Some(Command::Listen {
-                        local_host: address,
-                    })
-                },
-                "connect" => {
-                    let address = words.next()?.parse().ok()?;
-                    let peer_pi = words.next()?.parse().ok()?;
-                    Some(Command::Connect {
-                        remote_host: address,
-                        remote_pi: peer_pi,
-                    })
-                },
-                "message" => {
-                    let peer_pi = words.next()?.parse().ok()?;
-                    let message = words.next()?.to_string();
-                    Some(Command::Local {
-                        command: LocalCommand::Message(message),
-                        peer_pi: peer_pi,
-                    })
-                },
-                _ => {
-                    println!("bad command");
-                    None
-                },
-            }
-        });
+        .filter_map(|line| line.ok()?.parse().ok());
     tokio::spawn(async { run(sk, pk, control).await }).await.unwrap();
 }
