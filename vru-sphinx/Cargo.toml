@@ -21,17 +21,17 @@ optional = true
 
 [dev-dependencies.rac]
 path = "../rac"
-features = ["secp256k1"]
+features = ["curve25519-dalek"]
 
 [dev-dependencies.either]
 version = "1.6"
 
 [dev-dependencies.rand]
-version = "0.6"
+version = "0.7"
 
-[dev-dependencies.secp256k1]
-version = "0.19"
-features = ["rand"]
+[dev-dependencies.curve25519-dalek]
+version = "3.0"
+features = ["serde"]
 
 [dev-dependencies.hmac]
 version = "0.10"

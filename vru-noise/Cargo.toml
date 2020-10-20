@@ -25,7 +25,7 @@ version = "0.4"
 
 [dev-dependencies.rac]
 path = "../rac"
-features = ["secp256k1", "curve25519-dalek"]
+features = ["curve25519-dalek"]
 
 [dev-dependencies.serde]
 version = "1.0"
