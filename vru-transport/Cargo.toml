@@ -18,17 +18,18 @@ either = { version = "1.6" }
 rand = { version = "0.7" }
 base64 = { version = "0.13" }
 
-pqcrypto-kyber = { version = "0.6" }
-pqcrypto-traits = { version = "0.3" }
-num-bigint = { version = "0.3" }
-num-traits = { version = "0.2" }
-
 curve25519-dalek = { version = "3.0", features = ["serde"] }
 chacha20poly1305 = { version = "0.7" }
 sha2 = { version = "0.9" }
 sha3 = { version = "0.9" }
 chacha20 = { version = "0.6" }
 hmac = { version = "0.10" }
+
+pqcrypto-traits = { version = "0.3" }
+num-bigint = { version = "0.3" }
+num-traits = { version = "0.2" }
+[target.'cfg(not(target_arch = "aarch64"))'.dependencies]
+pqcrypto-kyber = { version = "0.6" }
 
 [dev-dependencies]
 hex = { version = "0.4" }

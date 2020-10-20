@@ -6,7 +6,133 @@ use rac::{
 use num_traits::ToPrimitive;
 use num_bigint::{ToBigUint, BigUint};
 use pqcrypto_traits::kem::{PublicKey as _, SharedSecret as _, Ciphertext as _};
+
+#[cfg(not(target_arch = "aarch64"))]
 use pqcrypto_kyber::kyber768;
+
+#[cfg(target_arch = "aarch64")]
+mod dummy {
+    use pqcrypto_traits::{kem, Error};
+
+    #[derive(Clone, Copy)]
+    pub struct PublicKey([u8; 1184]);
+
+    impl kem::PublicKey for PublicKey {
+        /// Get this object as a byte slice
+        #[inline]
+        fn as_bytes(&self) -> &[u8] {
+            &self.0
+        }
+
+        /// Construct this object from a byte slice
+        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+            if bytes.len() != std::mem::size_of::<Self>() {
+                Err(Error::BadLength {
+                    name: "",
+                    actual: bytes.len(),
+                    expected: std::mem::size_of::<Self>(),
+                })
+            } else {
+                let mut array = [0u8; std::mem::size_of::<Self>()];
+                array.copy_from_slice(bytes);
+                Ok(PublicKey(array))
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct SecretKey([u8; 2400]);
+
+    impl kem::SecretKey for SecretKey {
+        /// Get this object as a byte slice
+        #[inline]
+        fn as_bytes(&self) -> &[u8] {
+            &self.0
+        }
+
+        /// Construct this object from a byte slice
+        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+            if bytes.len() != std::mem::size_of::<Self>() {
+                Err(Error::BadLength {
+                    name: "",
+                    actual: bytes.len(),
+                    expected: std::mem::size_of::<Self>(),
+                })
+            } else {
+                let mut array = [0u8; std::mem::size_of::<Self>()];
+                array.copy_from_slice(bytes);
+                Ok(SecretKey(array))
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct Ciphertext([u8; 1088]);
+
+    impl kem::Ciphertext for Ciphertext {
+        /// Get this object as a byte slice
+        #[inline]
+        fn as_bytes(&self) -> &[u8] {
+            &self.0
+        }
+
+        /// Construct this object from a byte slice
+        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+            if bytes.len() != std::mem::size_of::<Self>() {
+                Err(Error::BadLength {
+                    name: "",
+                    actual: bytes.len(),
+                    expected: std::mem::size_of::<Self>(),
+                })
+            } else {
+                let mut array = [0u8; std::mem::size_of::<Self>()];
+                array.copy_from_slice(bytes);
+                Ok(Ciphertext(array))
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    pub struct SharedSecret([u8; 32]);
+
+    impl kem::SharedSecret for SharedSecret {
+        /// Get this object as a byte slice
+        #[inline]
+        fn as_bytes(&self) -> &[u8] {
+            &self.0
+        }
+
+        /// Construct this object from a byte slice
+        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+            if bytes.len() != std::mem::size_of::<Self>() {
+                Err(Error::BadLength {
+                    name: "",
+                    actual: bytes.len(),
+                    expected: std::mem::size_of::<Self>(),
+                })
+            } else {
+                let mut array = [0u8; std::mem::size_of::<Self>()];
+                array.copy_from_slice(bytes);
+                Ok(SharedSecret(array))
+            }
+        }
+    }
+
+    pub fn keypair() -> (PublicKey, SecretKey) {
+        unimplemented!()
+    }
+
+    pub fn encapsulate(pk: &PublicKey) -> (SharedSecret, Ciphertext) {
+        unimplemented!()
+    }
+
+    pub fn decapsulate(ct: &Ciphertext, sk: &SecretKey) -> SharedSecret {
+        unimplemented!()
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+use dummy as kyber768;
 
 const KYBER_Q: u16 = 3329;
 
