@@ -1,6 +1,6 @@
 use crate::{LineValid, Scalar, Curve};
 
-use generic_array::{GenericArray, typenum::U32};
+use generic_array::{GenericArray, typenum};
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_TABLE,
     edwards::{EdwardsPoint, CompressedEdwardsY},
@@ -9,7 +9,7 @@ use curve25519_dalek::{
 };
 
 impl LineValid for C25519Scalar {
-    type Length = U32;
+    type Length = typenum::U32;
 
     fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
         let mut buffer = [0; 32];
@@ -45,7 +45,7 @@ impl Scalar for C25519Scalar {
 }
 
 impl LineValid for MontgomeryPoint {
-    type Length = U32;
+    type Length = typenum::U32;
 
     fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
         let mut buffer = [0; 32];
@@ -60,8 +60,8 @@ impl LineValid for MontgomeryPoint {
 
 impl Curve for MontgomeryPoint {
     type Scalar = C25519Scalar;
-    type CompressedLength = U32;
-    type CoordinateLength = U32;
+    type CompressedLength = typenum::U32;
+    type CoordinateLength = typenum::U32;
 
     const NAME: &'static str = "25519";
 
@@ -92,12 +92,10 @@ impl Curve for MontgomeryPoint {
 }
 
 impl LineValid for EdwardsPoint {
-    type Length = U32;
+    type Length = typenum::U32;
 
     fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
-        let mut buffer = [0; 32];
-        buffer.clone_from_slice(a.as_slice());
-        CompressedEdwardsY::from_slice(buffer.as_ref())
+        CompressedEdwardsY::from_slice(a.as_slice())
             .decompress()
             .ok_or(())
     }
@@ -109,8 +107,8 @@ impl LineValid for EdwardsPoint {
 
 impl Curve for EdwardsPoint {
     type Scalar = C25519Scalar;
-    type CompressedLength = U32;
-    type CoordinateLength = U32;
+    type CompressedLength = typenum::U32;
+    type CoordinateLength = typenum::U32;
 
     const NAME: &'static str = "25519";
 
