@@ -3,6 +3,7 @@ members = [
     "rac",
     "vru-noise",
     "vru-sphinx",
+    "vru-kyber",
     "vru-transport",
     "vru-node",
 ]

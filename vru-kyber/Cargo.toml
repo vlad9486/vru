@@ -1,0 +1,9 @@
+[package]
+name = "vru-kyber"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vladislav.melnik@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+rac = { path = "../rac" }
+digest = { version = "0.9" }
