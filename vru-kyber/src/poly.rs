@@ -10,18 +10,38 @@ use super::{
     poly_inner::{PolyInner, Cbd},
 };
 
-pub struct Poly<S, B>
-where
-    S: PolySize,
-    B: Bit,
-{
-    inner: PolyInner<S>,
-    phantom_data: PhantomData<B>,
+pub trait PolyProperties {
+    type Domain: Bit;
+    type Small: Bit;
+
+    type CoDomain: PolyProperties;
 }
 
-impl<S> Poly<S, typenum::B0>
+impl<D, S> PolyProperties for (D, S)
+where
+    D: Bit + Not,
+    (<D as Not>::Output, S): PolyProperties,
+    S: Bit,
+{
+    type Domain = D;
+    type Small = S;
+
+    type CoDomain = (<D as Not>::Output, S);
+}
+
+pub struct Poly<S, P>
 where
     S: PolySize,
+    P: PolyProperties,
+{
+    inner: PolyInner<S>,
+    phantom_data: PhantomData<P>,
+}
+
+impl<S, P> Poly<S, P>
+where
+    S: PolySize,
+    P: PolyProperties<Domain = typenum::B0>,
 {
     pub fn compress(&self) -> GenericArray<u8, S::CompressedBytes> {
         self.inner.compress()
@@ -35,9 +55,10 @@ where
     }
 }
 
-impl<S> Poly<S, typenum::B1>
+impl<S, P> Poly<S, P>
 where
     S: PolySize,
+    P: PolyProperties<Domain = typenum::B1>,
 {
     pub fn get_noise<D, W>(seed: &[u8; 32], nonce: u8) -> Self
     where
@@ -59,20 +80,17 @@ where
     }
 }
 
-impl<S, B> Poly<S, B>
+impl<S, P> Poly<S, P>
 where
     S: PolySize,
-    B: Bit + Not,
-    <B as Not>::Output: Bit,
+    P: PolyProperties,
 {
-    pub fn functor_2<F, B0, B1>(a: &Poly<S, B0>, b: &Poly<S, B1>, f: F) -> Self
+    pub fn functor_2<F, P0, P1>(a: &Poly<S, P0>, b: &Poly<S, P1>, f: F) -> Self
     where
         F: Fn(&Coefficient, &Coefficient) -> Coefficient,
         S: PolySize,
-        B0: Bit + Not,
-        <B0 as Not>::Output: Bit,
-        B1: Bit + Not,
-        <B1 as Not>::Output: Bit,
+        P0: PolyProperties,
+        P1: PolyProperties,
     {
         let mut q = GenericArray::default();
         for i in S::c_range() {
@@ -85,16 +103,13 @@ where
         }
     }
 
-    pub fn functor_3<F, B0, B1, B2>(a: &Poly<S, B0>, b: &Poly<S, B1>, c: &Poly<S, B2>, f: F) -> Self
+    pub fn functor_3<F, P0, P1, P2>(a: &Poly<S, P0>, b: &Poly<S, P1>, c: &Poly<S, P2>, f: F) -> Self
     where
         F: Fn(&Coefficient, &Coefficient, &Coefficient) -> Coefficient,
         S: PolySize,
-        B0: Bit + Not,
-        <B0 as Not>::Output: Bit,
-        B1: Bit + Not,
-        <B1 as Not>::Output: Bit,
-        B2: Bit + Not,
-        <B2 as Not>::Output: Bit,
+        P0: PolyProperties,
+        P1: PolyProperties,
+        P2: PolyProperties,
     {
         let mut q = GenericArray::default();
         for i in S::c_range() {
@@ -123,10 +138,10 @@ where
         zetas: GenericArray<Coefficient, S::C>,
         omegas_inv_bit_rev_montgomery: GenericArray<Coefficient, S::Omegas>,
         psis_inv_montgomery: GenericArray<Coefficient, S::C>,
-    ) -> Poly<S, <B as Not>::Output> {
+    ) -> Poly<S, P::CoDomain> {
         let mut s = self.inner;
         let p = s.c.as_mut();
-        if B::BOOL {
+        if P::Domain::BOOL {
             let mut k = 1;
             for level in (0..8).rev() {
                 for start in S::c_range().step_by(2 * (1 << level)) {
@@ -190,12 +205,11 @@ pub trait Ntt {
 }
 
 // TODO: derive macro
-impl<B> Ntt for Poly<typenum::U32, B>
+impl<P> Ntt for Poly<typenum::U32, P>
 where
-    B: Bit + Not,
-    <B as Not>::Output: Bit + Not<Output = B>,
+    P: PolyProperties,
 {
-    type Output = Poly<typenum::U32, <B as Not>::Output>;
+    type Output = Poly<typenum::U32, P::CoDomain>;
 
     fn ntt(self) -> Self::Output {
         const OMEGAS_INV_BIT_REV_MONTGOMERY: [u16; 128] = [
