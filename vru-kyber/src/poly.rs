@@ -43,10 +43,6 @@ where
     S: PolySize,
     P: PolyProperties<Domain = typenum::B0>,
 {
-    pub fn compress(&self) -> GenericArray<u8, S::CompressedBytes> {
-        self.inner.compress()
-    }
-
     pub fn decompress(b: &GenericArray<u8, S::CompressedBytes>) -> Self {
         Poly {
             inner: PolyInner::decompress(b),
@@ -58,7 +54,7 @@ where
 impl<S, P> Poly<S, P>
 where
     S: PolySize,
-    P: PolyProperties<Domain = typenum::B1>,
+    P: PolyProperties<Domain = typenum::B1, Small = typenum::B1>,
 {
     pub fn get_noise<D, W>(seed: &[u8; 32], nonce: u8) -> Self
     where
@@ -120,6 +116,10 @@ where
             inner: PolyInner { c: q },
             phantom_data: PhantomData,
         }
+    }
+
+    pub fn compress(&self) -> GenericArray<u8, S::CompressedBytes> {
+        self.inner.compress()
     }
 
     pub fn to_bytes(&self) -> GenericArray<u8, S::Bytes> {
