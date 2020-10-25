@@ -2,7 +2,7 @@ use core::ops::Mul;
 use rac::generic_array::{GenericArray, ArrayLength, typenum};
 use super::{
     coefficient::Coefficient,
-    size::{PolySize, PolyVectorSize},
+    size::PolySize,
 };
 
 pub struct PolyInner<S>
@@ -105,21 +105,53 @@ where
     }
 }
 
-pub trait Cbd<S, V>
-where
-    S: PolySize,
-    V: PolyVectorSize<S>,
-{
-    fn cbd(v: GenericArray<u8, V::Eta>) -> Self;
+impl PolyInner<typenum::U32> {
+    pub fn to_message(&self) -> [u8; 32] {
+        let mut message = [0; 32];
+        for (i, b) in message.iter_mut().enumerate() {
+            for j in 0..8 {
+                let t = (Coefficient::freeze(&self.c[8 * i + j]) << 1)
+                    .wrapping_add(Coefficient::Q / 2)
+                    .wrapping_div(Coefficient::Q) & 1;
+                *b |= (t << j) as u8;
+            }
+        }
+        message
+    }
+
+    pub fn from_message(message: &[u8; 32]) -> Self {
+        let mut c = GenericArray::default();
+        for (i, b) in message.iter().enumerate() {
+            for j in 0..8 {
+                let mask = ::core::u16::MIN.wrapping_sub(u16::from(b >> j) & 1);
+                c[8 * i + j] = Coefficient(mask & ((Coefficient::Q + 1) / 2));
+            }
+        }
+        Self::from_coefficients(c)
+    }
 }
 
-// TODO: impl for U3 and U4
+pub trait Cbd<S, W>
+where
+    S: PolySize,
+{
+    type Eta: ArrayLength<u8>;
+
+    fn cbd(v: GenericArray<u8, Self::Eta>) -> Self;
+}
+
+// K = 2 => W = U10
+// K = 3 => W = U8
+// K = 4 => W = U6
+// TODO: impl for U8 and U6
 impl<S> Cbd<S, typenum::U2> for PolyInner<S>
 where
     S: PolySize + Mul<typenum::U10>,
     <S as Mul<typenum::U10>>::Output: ArrayLength<u8>,
 {
-    fn cbd(b: GenericArray<u8, <typenum::U2 as PolyVectorSize<S>>::Eta>) -> Self {
+    type Eta = <S as Mul<typenum::U10>>::Output;
+
+    fn cbd(b: GenericArray<u8, Self::Eta>) -> Self {
         let mut c = GenericArray::default();
 
         for i in S::range() {

@@ -6,7 +6,7 @@ use rac::generic_array::{
 use digest::{Update, ExtendableOutput, XofReader};
 use super::{
     coefficient::Coefficient,
-    size::{PolySize, PolyVectorSize},
+    size::PolySize,
     poly_inner::{PolyInner, Cbd},
 };
 
@@ -39,13 +39,12 @@ impl<S> Poly<S, typenum::B1>
 where
     S: PolySize,
 {
-    pub fn get_noise<D, V>(seed: &[u8; 32], nonce: u8) -> Self
+    pub fn get_noise<D, W>(seed: &[u8; 32], nonce: u8) -> Self
     where
         D: Default + Update + ExtendableOutput,
-        V: PolyVectorSize<S>,
-        PolyInner<S>: Cbd<S, V>,
+        PolyInner<S>: Cbd<S, W>,
     {
-        let mut b = GenericArray::<u8, V::Eta>::default();
+        let mut b = GenericArray::<u8, <PolyInner<S> as Cbd<S, W>>::Eta>::default();
 
         D::default()
             .chain(seed.as_ref())
@@ -191,12 +190,12 @@ pub trait Ntt {
 }
 
 // TODO: derive macro
-impl<B> Ntt for Poly<typenum::U256, B>
+impl<B> Ntt for Poly<typenum::U32, B>
 where
     B: Bit + Not,
     <B as Not>::Output: Bit + Not<Output = B>,
 {
-    type Output = Poly<typenum::U256, <B as Not>::Output>;
+    type Output = Poly<typenum::U32, <B as Not>::Output>;
 
     fn ntt(self) -> Self::Output {
         const OMEGAS_INV_BIT_REV_MONTGOMERY: [u16; 128] = [
