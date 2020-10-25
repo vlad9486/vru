@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 rac = { path = "../rac" }
 digest = { version = "0.9" }
+rand = { version = "0.7" }
