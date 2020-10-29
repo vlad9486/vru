@@ -1,6 +1,6 @@
-use core::ops::{AddAssign, SubAssign};
+use core::ops::{AddAssign, SubAssign, Add, Sub};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Coefficient(pub u16);
 
 impl Coefficient {
@@ -33,9 +33,22 @@ impl Coefficient {
         let c = c as u16;
         m ^ ((r ^ m) & c)
     }
+
+    pub fn acc<'a, I>(i: I) -> Self
+    where
+        I: Iterator<Item = (&'a Self, &'a Self)>,
+    {
+        let tmp = i
+            .map(|(a, b)| {
+                let t = Coefficient::montgomery_reduce(4613 * u32::from(b.0));
+                Coefficient::montgomery_reduce(u32::from(a.0) * u32::from(t.0)).0
+            })
+            .sum();
+
+        Coefficient::barrett_reduce(tmp)
+    }
 }
 
-// TODO: Add, Sub, Mul
 impl<'a> AddAssign<&'a Coefficient> for Coefficient {
     fn add_assign(&mut self, rhs: &'a Coefficient) {
         *self = Self::barrett_reduce(self.0 + rhs.0)
@@ -45,5 +58,21 @@ impl<'a> AddAssign<&'a Coefficient> for Coefficient {
 impl<'a> SubAssign<&'a Coefficient> for Coefficient {
     fn sub_assign(&mut self, rhs: &'a Coefficient) {
         *self = Self::barrett_reduce(self.0 + 3 * Self::Q - rhs.0)
+    }
+}
+
+impl<'a, 'b> Add<&'b Coefficient> for &'a Coefficient {
+    type Output = Coefficient;
+
+    fn add(self, rhs: &'b Coefficient) -> Self::Output {
+        Coefficient::barrett_reduce(self.0 + rhs.0)
+    }
+}
+
+impl<'a, 'b> Sub<&'b Coefficient> for &'a Coefficient {
+    type Output = Coefficient;
+
+    fn sub(self, rhs: &'b Coefficient) -> Self::Output {
+        Coefficient::barrett_reduce(self.0 + 3 * Coefficient::Q - rhs.0)
     }
 }

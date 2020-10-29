@@ -8,3 +8,8 @@ edition = "2018"
 rac = { path = "../rac" }
 digest = { version = "0.9" }
 rand = { version = "0.7" }
+sha3 = { version = "0.9" }
+pq-kem = { version = "0.4" }
+
+[dev-dependencies]
+hex = { version = "0.4" }

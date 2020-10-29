@@ -1,10 +1,8 @@
 use core::ops::Mul;
 use rac::generic_array::{GenericArray, ArrayLength, typenum};
-use super::{
-    coefficient::Coefficient,
-    size::PolySize,
-};
+use super::{coefficient::Coefficient, size::PolySize};
 
+#[derive(Clone)]
 pub struct PolyInner<S>
 where
     S: PolySize,
@@ -20,7 +18,53 @@ where
         PolyInner { c: c }
     }
 
-    pub fn compress(&self) -> GenericArray<u8, S::CompressedBytes> {
+    pub fn compress_slightly(&self) -> GenericArray<u8, S::CompressedSlightly> {
+        let mut t = [0; 8];
+        let mut b = GenericArray::default();
+
+        for i in S::range() {
+            for j in 0..8 {
+                let c = u32::from(Coefficient::freeze(&self.c[8 * i + j]));
+                let q = u32::from(Coefficient::Q);
+                t[j] = ((((c << 11) + q / 2) / q) & 0x7ff) as u16;
+            }
+
+            b[11 * i + 0] = (t[0] & 0xff) as u8;
+            b[11 * i + 1] = ((t[0] >> 8) | ((t[1] & 0x1f) << 3)) as u8;
+            b[11 * i + 2] = ((t[1] >> 5) | ((t[2] & 0x03) << 6)) as u8;
+            b[11 * i + 3] = ((t[2] >> 2) & 0xff) as u8;
+            b[11 * i + 4] = ((t[2] >> 10) | ((t[3] & 0x7f) << 1)) as u8;
+            b[11 * i + 5] = ((t[3] >> 7) | ((t[4] & 0x0f) << 4)) as u8;
+            b[11 * i + 6] = ((t[4] >> 4) | ((t[5] & 0x01) << 7)) as u8;
+            b[11 * i + 7] = ((t[5] >> 1) & 0xff) as u8;
+            b[11 * i + 8] = ((t[5] >> 9) | ((t[6] & 0x3f) << 2)) as u8;
+            b[11 * i + 9] = ((t[6] >> 6) | ((t[7] & 0x07) << 5)) as u8;
+            b[11 * i + 10] = (t[7] >> 3) as u8;
+        }
+
+        b
+    }
+
+    pub fn decompress_slightly(b: &GenericArray<u8, S::CompressedSlightly>) -> Self {
+        let mut c = GenericArray::default();
+
+        for i in S::range() {
+            let f = |a: u32| Coefficient((((a * u32::from(Coefficient::Q)) + 1024) >> 11) as u16);
+            let b = |j| u32::from(b[11 * i + j]);
+            c[8 * i + 0] = f(b(0) | ((b(1) & 0x07) << 8));
+            c[8 * i + 1] = f((b(1) >> 3) | ((b(2) & 0x3f) << 5));
+            c[8 * i + 2] = f((b(2) >> 6) | ((b(3) & 0xff) << 2) | ((b(4) & 0x01) << 10));
+            c[8 * i + 3] = f((b(4) >> 1) | ((b(5) & 0x0f) << 7));
+            c[8 * i + 4] = f((b(5) >> 4) | ((b(6) & 0x7f) << 4));
+            c[8 * i + 5] = f((b(6) >> 7) | ((b(7) & 0xff) << 1) | ((b(8) & 0x03) << 9));
+            c[8 * i + 6] = f((b(8) >> 2) | ((b(9) & 0x1f) << 6));
+            c[8 * i + 7] = f((b(9) >> 5) | ((b(10) & 0xff) << 3));
+        }
+
+        Self::from_coefficients(c)
+    }
+
+    pub fn compress(&self) -> GenericArray<u8, S::Compressed> {
         let mut t = [0; 8];
         let mut b = GenericArray::default();
 
@@ -39,7 +83,7 @@ where
         b
     }
 
-    pub fn decompress(b: &GenericArray<u8, S::CompressedBytes>) -> Self {
+    pub fn decompress(b: &GenericArray<u8, S::Compressed>) -> Self {
         let mut c = GenericArray::default();
 
         for i in S::range() {
@@ -103,23 +147,22 @@ where
 
         Self::from_coefficients(c)
     }
-}
 
-impl PolyInner<typenum::U32> {
-    pub fn to_message(&self) -> [u8; 32] {
-        let mut message = [0; 32];
+    pub fn to_message(&self) -> GenericArray<u8, S> {
+        let mut message = GenericArray::default();
         for (i, b) in message.iter_mut().enumerate() {
             for j in 0..8 {
                 let t = (Coefficient::freeze(&self.c[8 * i + j]) << 1)
                     .wrapping_add(Coefficient::Q / 2)
-                    .wrapping_div(Coefficient::Q) & 1;
+                    .wrapping_div(Coefficient::Q)
+                    & 1;
                 *b |= (t << j) as u8;
             }
         }
         message
     }
 
-    pub fn from_message(message: &[u8; 32]) -> Self {
+    pub fn from_message(message: &GenericArray<u8, S>) -> Self {
         let mut c = GenericArray::default();
         for (i, b) in message.iter().enumerate() {
             for j in 0..8 {
@@ -155,9 +198,9 @@ where
         let mut c = GenericArray::default();
 
         for i in S::range() {
-            for j in 0..1 {
+            for j in 0..2 {
                 let mut a = [0; 8];
-                a.clone_from_slice(&b.as_ref()[(5 * (2 * i + j))..(5 * (2 * i + j + 1))]);
+                a[0..5].clone_from_slice(&b.as_ref()[(5 * (2 * i + j))..(5 * (2 * i + j + 1))]);
                 let t = u64::from_le_bytes(a);
                 let d = (0..5).map(|j| (t >> j) & 0x08_4210_8421).sum::<u64>();
 

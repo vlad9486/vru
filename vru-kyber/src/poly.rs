@@ -1,6 +1,7 @@
 use core::{marker::PhantomData, ops::Not};
 use rac::generic_array::{
-    GenericArray,
+    GenericArray, ArrayLength,
+    sequence::GenericSequence,
     typenum::{self, Bit},
 };
 use digest::{Update, ExtendableOutput, XofReader};
@@ -10,51 +11,37 @@ use super::{
     poly_inner::{PolyInner, Cbd},
 };
 
-pub trait PolyProperties {
-    type Domain: Bit;
-    type Small: Bit;
-
-    type CoDomain: PolyProperties;
-}
-
-impl<D, S> PolyProperties for (D, S)
-where
-    D: Bit + Not,
-    (<D as Not>::Output, S): PolyProperties,
-    S: Bit,
-{
-    type Domain = D;
-    type Small = S;
-
-    type CoDomain = (<D as Not>::Output, S);
-}
-
 pub struct Poly<S, P>
 where
     S: PolySize,
-    P: PolyProperties,
+    P: Bit,
 {
     inner: PolyInner<S>,
     phantom_data: PhantomData<P>,
 }
 
-impl<S, P> Poly<S, P>
+impl<S> Poly<S, typenum::B1>
 where
     S: PolySize,
-    P: PolyProperties<Domain = typenum::B0>,
 {
-    pub fn decompress(b: &GenericArray<u8, S::CompressedBytes>) -> Self {
+    pub fn decompress(b: &GenericArray<u8, S::Compressed>) -> Self {
         Poly {
             inner: PolyInner::decompress(b),
             phantom_data: PhantomData,
         }
     }
+
+    pub fn decompress_slightly(b: &GenericArray<u8, S::CompressedSlightly>) -> Self {
+        Poly {
+            inner: PolyInner::decompress_slightly(b),
+            phantom_data: PhantomData,
+        }
+    }
 }
 
-impl<S, P> Poly<S, P>
+impl<S> Poly<S, typenum::B1>
 where
     S: PolySize,
-    P: PolyProperties<Domain = typenum::B1, Small = typenum::B1>,
 {
     pub fn get_noise<D, W>(seed: &[u8; 32], nonce: u8) -> Self
     where
@@ -74,19 +61,61 @@ where
             phantom_data: PhantomData,
         }
     }
+
+    pub fn to_message(&self) -> GenericArray<u8, S> {
+        self.inner.to_message()
+    }
+
+    pub fn from_message(message: &GenericArray<u8, S>) -> Self {
+        Poly {
+            inner: PolyInner::from_message(message),
+            phantom_data: PhantomData,
+        }
+    }
 }
 
 impl<S, P> Poly<S, P>
 where
     S: PolySize,
-    P: PolyProperties,
+    P: Bit + Not,
+    <P as Not>::Output: Bit,
 {
+    pub fn wrap(inner: PolyInner<S>) -> Self {
+        Poly {
+            inner: inner,
+            phantom_data: PhantomData,
+        }
+    }
+
+    pub fn functor_2_a<F, W, P0, P1>(
+        a: &GenericArray<Poly<S, P0>, W>,
+        b: &GenericArray<Poly<S, P1>, W>,
+        f: F,
+    ) -> Self
+    where
+        F: Fn(GenericArray<Coefficient, W>, GenericArray<Coefficient, W>) -> Coefficient,
+        W: ArrayLength<Coefficient> + ArrayLength<Poly<S, P0>> + ArrayLength<Poly<S, P1>>,
+        P0: Bit,
+        P1: Bit,
+    {
+        let mut q = GenericArray::default();
+        for i in S::c_range() {
+            let a = GenericArray::generate(|j| a[j].inner.c[i].clone());
+            let b = GenericArray::generate(|j| b[j].inner.c[i].clone());
+            q[i] = f(a, b);
+        }
+
+        Poly {
+            inner: PolyInner { c: q },
+            phantom_data: PhantomData,
+        }
+    }
+
     pub fn functor_2<F, P0, P1>(a: &Poly<S, P0>, b: &Poly<S, P1>, f: F) -> Self
     where
         F: Fn(&Coefficient, &Coefficient) -> Coefficient,
-        S: PolySize,
-        P0: PolyProperties,
-        P1: PolyProperties,
+        P0: Bit,
+        P1: Bit,
     {
         let mut q = GenericArray::default();
         for i in S::c_range() {
@@ -102,10 +131,9 @@ where
     pub fn functor_3<F, P0, P1, P2>(a: &Poly<S, P0>, b: &Poly<S, P1>, c: &Poly<S, P2>, f: F) -> Self
     where
         F: Fn(&Coefficient, &Coefficient, &Coefficient) -> Coefficient,
-        S: PolySize,
-        P0: PolyProperties,
-        P1: PolyProperties,
-        P2: PolyProperties,
+        P0: Bit,
+        P1: Bit,
+        P2: Bit,
     {
         let mut q = GenericArray::default();
         for i in S::c_range() {
@@ -118,8 +146,12 @@ where
         }
     }
 
-    pub fn compress(&self) -> GenericArray<u8, S::CompressedBytes> {
+    pub fn compress(&self) -> GenericArray<u8, S::Compressed> {
         self.inner.compress()
+    }
+
+    pub fn compress_slightly(&self) -> GenericArray<u8, S::CompressedSlightly> {
+        self.inner.compress_slightly()
     }
 
     pub fn to_bytes(&self) -> GenericArray<u8, S::Bytes> {
@@ -134,16 +166,18 @@ where
     }
 
     fn ntt_inner(
-        self,
+        &self,
         zetas: GenericArray<Coefficient, S::C>,
         omegas_inv_bit_rev_montgomery: GenericArray<Coefficient, S::Omegas>,
         psis_inv_montgomery: GenericArray<Coefficient, S::C>,
-    ) -> Poly<S, P::CoDomain> {
-        let mut s = self.inner;
+    ) -> Poly<S, <P as Not>::Output> {
+        let mut s = self.inner.clone();
         let p = s.c.as_mut();
-        if P::Domain::BOOL {
+        // binary logarithm of S::C
+        let l = 64 - ((S::c_range().len() - 1) as u64).leading_zeros();
+        if P::BOOL {
             let mut k = 1;
-            for level in (0..8).rev() {
+            for level in (0..l).rev() {
                 for start in S::c_range().step_by(2 * (1 << level)) {
                     let zeta = zetas[k].0;
                     k += 1;
@@ -155,16 +189,16 @@ where
 
                         p[j + (1 << level)] =
                             Coefficient::barrett_reduce(p[j].0 + 4 * Coefficient::Q - t.0);
-                        p[j] = if level & 1 != 0 {
-                            Coefficient(p[j].0 + t.0)
+                        if level & 1 != 0 {
+                            p[j] = Coefficient(p[j].0 + t.0);
                         } else {
-                            Coefficient::barrett_reduce(p[j].0 + t.0)
-                        };
+                            p[j] += &t;
+                        }
                     }
                 }
             }
         } else {
-            for level in 0..8 {
+            for level in 0..l {
                 for start in 0..(1 << level) {
                     let r = start..(S::c_range().len() - 1);
                     for (jt, j) in r.step_by(2 * (1 << level)).enumerate() {
@@ -201,17 +235,18 @@ where
 pub trait Ntt {
     type Output: Ntt;
 
-    fn ntt(self) -> Self::Output;
+    fn ntt(&self) -> Self::Output;
 }
 
 // TODO: derive macro
 impl<P> Ntt for Poly<typenum::U32, P>
 where
-    P: PolyProperties,
+    P: Bit + Not,
+    <P as Not>::Output: Bit + Not<Output = P>,
 {
-    type Output = Poly<typenum::U32, P::CoDomain>;
+    type Output = Poly<typenum::U32, <P as Not>::Output>;
 
-    fn ntt(self) -> Self::Output {
+    fn ntt(&self) -> Self::Output {
         const OMEGAS_INV_BIT_REV_MONTGOMERY: [u16; 128] = [
             990, 254, 862, 5047, 6586, 5538, 4400, 7103, 2025, 6804, 3858, 1595, 2299, 4345, 1319,
             7197, 7678, 5213, 1906, 3639, 1749, 2497, 2547, 6100, 343, 538, 7390, 6396, 7418, 1267,
