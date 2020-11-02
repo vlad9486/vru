@@ -4,6 +4,7 @@ use core::{
 };
 use rac::{
     Line, LineValid,
+    Concat,
     generic_array::{
         GenericArray, ArrayLength,
         sequence::GenericSequence,
@@ -18,7 +19,9 @@ use super::{
     poly::{Poly, Ntt},
 };
 
-fn gen_matrix<S, W, T>(seed: &[u8; 32]) -> GenericArray<GenericArray<Poly<S, typenum::B0>, W>, W>
+pub type C = Concat<GenericArray<u8, typenum::U32>, GenericArray<u8, typenum::U32>>;
+
+fn gen_matrix<S, W, T>(seed: &GenericArray<u8, typenum::U32>) -> GenericArray<GenericArray<Poly<S, typenum::B0>, W>, W>
 where
     S: PolySize + Unsigned,
     W: ArrayLength<Poly<S, typenum::B0>> + ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,
@@ -69,13 +72,14 @@ where
     poly_vector: GenericArray<Poly<S, typenum::B0>, W>,
 }
 
+#[derive(Clone)]
 pub struct PublicKey<S, W>
 where
     S: PolySize,
     W: ArrayLength<Poly<S, typenum::B1>>,
 {
     poly_vector: GenericArray<Poly<S, typenum::B1>, W>,
-    public_seed: [u8; 32],
+    public_seed: GenericArray<u8, typenum::U32>,
 }
 
 pub struct CipherText<S, W>
@@ -87,7 +91,7 @@ where
     poly: Poly<S, typenum::B1>,
 }
 
-pub fn key_pair<S, W>(seed: &[u8; 32]) -> (SecretKey<S, W>, PublicKey<S, W>)
+pub fn key_pair<S, W>(seed: &GenericArray<u8, typenum::U32>) -> (SecretKey<S, W>, PublicKey<S, W>)
 where
     S: PolySize,
     W: ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,
@@ -100,17 +104,8 @@ where
 {
     use sha3::{Sha3_512, Shake256};
 
-    let seed = Sha3_512::default().chain(seed.as_ref()).finalize_fixed();
-    let public_seed = {
-        let mut a = [0; 32];
-        a.clone_from_slice(&seed[..32]);
-        a
-    };
-    let noise_seed = {
-        let mut a = [0; 32];
-        a.clone_from_slice(&seed[32..]);
-        a
-    };
+    let c = Sha3_512::default().chain(seed).finalize_fixed();
+    let Concat(public_seed, noise_seed) = C::clone_array(&c);
 
     let matrix = gen_matrix::<S, W, typenum::B0>(&public_seed);
     let sk = GenericArray::generate(|i| Poly::get_noise::<Shake256, W>(&noise_seed, i as u8).ntt());
@@ -138,7 +133,7 @@ where
 }
 
 pub fn encapsulate<S, W>(
-    noise_seed: &[u8; 32],
+    noise_seed: &GenericArray<u8, typenum::U32>,
     message: &GenericArray<u8, S>,
     public_key: &PublicKey<S, W>,
 ) -> CipherText<S, W>
@@ -155,11 +150,11 @@ where
     use sha3::Shake256;
 
     let matrix = gen_matrix::<S, W, typenum::B1>(&public_key.public_seed);
-    let sp = GenericArray::generate(|i| Poly::get_noise::<Shake256, W>(&noise_seed, i as u8).ntt());
+    let sp = GenericArray::generate(|i| Poly::get_noise::<Shake256, W>(noise_seed, i as u8).ntt());
 
     let ep: GenericArray<Poly<S, typenum::B1>, W> = GenericArray::generate(|i| {
         let i = i + W::USIZE;
-        Poly::get_noise::<Shake256, W>(&noise_seed, i as u8)
+        Poly::get_noise::<Shake256, W>(noise_seed, i as u8)
     });
 
     let bp = GenericArray::generate(|i| {
@@ -176,7 +171,7 @@ where
     });
     let v = v.ntt();
 
-    let epp = Poly::get_noise::<Shake256, W>(&noise_seed, 2 * (W::USIZE as u8));
+    let epp = Poly::get_noise::<Shake256, W>(noise_seed, 2 * (W::USIZE as u8));
     let k = Poly::from_message(message);
 
     let v = Poly::functor_3(&v, &k, &epp, |v, k, epp| &(v + epp) + k);
@@ -264,7 +259,7 @@ where
             .chunks(S::CompressedSlightly::USIZE)
             .map(|slice| Poly::decompress_slightly(GenericArray::from_slice(slice)));
         let pos = S::CompressedSlightly::USIZE * W::USIZE;
-        let mut seed = [0; 32];
+        let mut seed = GenericArray::default();
         seed.clone_from_slice(&a[pos..]);
 
         Ok(PublicKey {
@@ -348,13 +343,13 @@ where
 #[cfg(test)]
 mod tests {
     use std::convert::TryInto;
-    use rac::{LineValid, Line, generic_array::{GenericArray, ArrayLength, typenum}};
+    use rac::{LineValid, Line, Concat, generic_array::{GenericArray, ArrayLength, typenum}};
     use sha3::{
         Sha3_256, Sha3_512,
         digest::{Update, FixedOutput},
     };
     use super::{SecretKey, PublicKey, CipherText, Poly, PolyInner, Cbd, Coefficient};
-    use super::{key_pair, encapsulate, decapsulate};
+    use super::{C, key_pair, encapsulate, decapsulate};
 
     fn indcpa<W>(seed_text: &str, sk_text: &str, pk_text: &str, e_seed_text: &str, ct_text: &str)
     where
@@ -379,8 +374,9 @@ mod tests {
         let (seed, m) = {
             let p = Sha3_256::default().chain(seed).finalize_fixed();
             let q = Sha3_256::default().chain(&pk_t).finalize_fixed();
-            let pq = Sha3_512::default().chain(&p).chain(&q).finalize_fixed();
-            (pq.as_slice()[32..].try_into().unwrap(), p)
+            let c = Sha3_512::default().chain(&p).chain(&q).finalize_fixed();
+            let Concat(_, pq) = C::clone_array(&c);
+            (pq, p)
         };
         let pk = Line::clone_array(&pk_t);
         let ct = encapsulate(&seed, &m, &pk);

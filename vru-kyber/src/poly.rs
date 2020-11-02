@@ -11,6 +11,7 @@ use super::{
     poly_inner::{PolyInner, Cbd},
 };
 
+#[derive(Clone)]
 pub struct Poly<S, P>
 where
     S: PolySize,
@@ -43,7 +44,7 @@ impl<S> Poly<S, typenum::B1>
 where
     S: PolySize,
 {
-    pub fn get_noise<D, W>(seed: &[u8; 32], nonce: u8) -> Self
+    pub fn get_noise<D, W>(seed: &GenericArray<u8, typenum::U32>, nonce: u8) -> Self
     where
         D: Default + Update + ExtendableOutput,
         PolyInner<S>: Cbd<S, W>,
@@ -51,7 +52,7 @@ where
         let mut b = GenericArray::<u8, <PolyInner<S> as Cbd<S, W>>::Eta>::default();
 
         D::default()
-            .chain(seed.as_ref())
+            .chain(seed)
             .chain([nonce].as_ref())
             .finalize_xof()
             .read(b.as_mut());
