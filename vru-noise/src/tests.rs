@@ -2,6 +2,7 @@ use generic_array::GenericArray;
 use rac::{Curve, LineValid};
 use serde::{Serialize, Deserialize};
 use core::{marker::PhantomData, ops::Mul};
+use std::prelude::v1::Vec;
 use super::SymmetricState;
 
 #[test]
@@ -150,7 +151,8 @@ fn Noise_XK_25519_AESGCM_SHA512<'a>(v: &TestVector<'a>) {
         .iter()
         .fold(cipher.swap(), |mut cipher, pair| {
             let mut buffer = hex::decode(pair.payload).unwrap();
-            cipher.encrypt_ext(&[], &mut buffer);
+            let tag = cipher.encrypt(&[], buffer.as_mut());
+            buffer.extend_from_slice(tag.as_ref());
             assert_eq!(pair.ciphertext, hex::encode(buffer));
             cipher.swap()
         });
