@@ -186,4 +186,14 @@ mod tests {
     fn test_2() {
         generic::<typenum::U2>()
     }
+
+    #[test]
+    fn test_3() {
+        generic::<typenum::U3>()
+    }
+
+    #[test]
+    fn test_4() {
+        generic::<typenum::U4>()
+    }
 }

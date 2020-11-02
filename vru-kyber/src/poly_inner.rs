@@ -215,3 +215,61 @@ where
         Self::from_coefficients(c)
     }
 }
+
+impl<S> Cbd<S, typenum::U3> for PolyInner<S>
+where
+    S: PolySize + Mul<typenum::U8>,
+    <S as Mul<typenum::U8>>::Output: ArrayLength<u8>,
+{
+    type Eta = <S as Mul<typenum::U8>>::Output;
+
+    fn cbd(b: GenericArray<u8, Self::Eta>) -> Self {
+        let mut c = GenericArray::default();
+
+        for i in S::range() {
+            for j in 0..2 {
+                let mut a = [0; 4];
+                a.clone_from_slice(&b.as_ref()[(4 * (2 * i + j))..(4 * (2 * i + j + 1))]);
+                let t = u32::from_le_bytes(a);
+                let d = (0..4).map(|j| (t >> j) & 0x1111_1111).sum::<u32>();
+
+                for k in 0..4 {
+                    let a = (d >> (8 * k)) & 0xf;
+                    let b = (d >> ((8 * k) + 4)) & 0xf;
+                    c[4 * (2 * i + j) + k] = Coefficient((a as u16) + Coefficient::Q - (b as u16));
+                }
+            }
+        }
+
+        Self::from_coefficients(c)
+    }
+}
+
+impl<S> Cbd<S, typenum::U4> for PolyInner<S>
+where
+    S: PolySize + Mul<typenum::U6>,
+    <S as Mul<typenum::U6>>::Output: ArrayLength<u8>,
+{
+    type Eta = <S as Mul<typenum::U6>>::Output;
+
+    fn cbd(b: GenericArray<u8, Self::Eta>) -> Self {
+        let mut c = GenericArray::default();
+
+        for i in S::range() {
+            for j in 0..2 {
+                let mut a = [0; 4];
+                a[0..3].clone_from_slice(&b.as_ref()[(3 * (2 * i + j))..(3 * (2 * i + j + 1))]);
+                let t = u32::from_le_bytes(a);
+                let d = (0..3).map(|j| (t >> j) & 0x249249).sum::<u32>();
+
+                for k in 0..4 {
+                    let a = (d >> (6 * k)) & 0x7;
+                    let b = (d >> ((6 * k) + 3)) & 0x7;
+                    c[4 * (2 * i + j) + k] = Coefficient((a as u16) + Coefficient::Q - (b as u16));
+                }
+            }
+        }
+
+        Self::from_coefficients(c)
+    }
+}
