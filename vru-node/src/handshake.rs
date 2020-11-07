@@ -28,7 +28,7 @@ where
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
     let (cipher, peer_pk, message) = state
-        .generate::<SimpleRotor, L>(message, payload, sk, peer_pi)
+        .generate::<_, L, SimpleRotor>(message, &mut rand::thread_rng(), payload, pk, sk, peer_pi)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
 
@@ -54,12 +54,12 @@ where
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
     let (state, peer_pk, message) = state
-        .consume(message, &pk)
+        .consume(message, &mut rand::thread_rng(), &pk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
     let (cipher, payload) = state
-        .consume::<SimpleRotor, L>(message, &sk)
+        .consume::<SimpleRotor, L>(message, pk, &sk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
 
     Ok((peer_pk, cipher, payload))

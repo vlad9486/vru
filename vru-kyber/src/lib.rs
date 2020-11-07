@@ -14,3 +14,4 @@ mod indcpa;
 mod kem;
 
 pub use self::kem::Kyber;
+pub use pq_kem::Kem;

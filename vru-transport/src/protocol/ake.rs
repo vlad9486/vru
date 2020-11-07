@@ -1,9 +1,5 @@
 use std::{ops::Add, marker::PhantomData, fmt, str::FromStr};
 use curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar};
-use sha2::{
-    Sha256,
-    digest::{FixedOutput, Update},
-};
 use vru_noise::{SymmetricState, Cipher, Unidirectional, Rotor, ChainingKey, Key, Tag};
 use rac::{
     LineValid, Line, Concat, Curve,
@@ -31,7 +27,7 @@ impl PublicKey {
     {
         let e_sk = Scalar::try_clone_array(&GenericArray::generate(|_| rng.gen())).unwrap();
         let e_pk = EdwardsPoint::base().exp_ec(&e_sk);
-        let (pq_sk, pq_pk) = PkLattice::key_pair();
+        let (pq_sk, pq_pk) = PkLattice::key_pair(rng);
 
         (
             SecretKey {
@@ -92,16 +88,14 @@ fn decompress(pk_c: &PublicKeyCompressed) -> PublicKey {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PublicIdentity {
     elliptic: EdwardsPoint,
-    lattice: GenericArray<u8, <Sha256 as FixedOutput>::OutputSize>,
+    lattice: GenericArray<u8, typenum::U32>,
 }
 
 impl PublicIdentity {
     pub fn new(pk: &PublicKey) -> Self {
         PublicIdentity {
             elliptic: pk.elliptic.clone(),
-            lattice: Sha256::default()
-                .chain(pk.lattice.as_ref())
-                .finalize_fixed(),
+            lattice: pk.lattice.hash(),
         }
     }
 }
@@ -199,6 +193,7 @@ pub struct State {
 pub struct StateEphemeral {
     symmetric_state: SymmetricState<Noise, Key<Noise, typenum::U1>>,
     e_sk: SecretKey,
+    e_pk: PublicKey,
 }
 
 pub struct StateFinal {
@@ -240,7 +235,7 @@ impl State {
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&e_pk_c.elliptic)
-                    .mix_hash(&e_pk.lattice.as_ref())
+                    .mix_hash(&e_pk.lattice.clone_line())
                     .mix_shared_secret(&Curve::compress(&peer_s_pi.elliptic.exp_ec(&e_sk.elliptic)))
                     .encrypt(&mut [])
                     .destruct(|t| tag = t);
@@ -249,6 +244,7 @@ impl State {
                     StateEphemeral {
                         symmetric_state: symmetric_state,
                         e_sk: e_sk,
+                        e_pk: e_pk,
                     },
                     Concat(e_pk_c, tag),
                 )
@@ -269,18 +265,18 @@ impl State {
         match self {
             State { symmetric_state } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
-                let peer_e_pq = peer_e_pk.lattice.encapsulate();
+                let peer_e_pq = peer_e_pk.lattice.encapsulate(rng);
 
                 let (e_sk, e_pk) = PublicKey::key_pair(rng);
                 let e_pk_c = compress(&e_pk, rng);
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&peer_e_pk_c.elliptic)
-                    .mix_hash(&peer_e_pk.lattice.as_ref())
+                    .mix_hash(&peer_e_pk.lattice.clone_line())
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&s_sk.elliptic)))
                     .decrypt(&mut [], tag)?
                     .mix_hash(&e_pk_c.elliptic)
-                    .mix_hash(&e_pk.lattice.as_ref())
+                    .mix_hash(&e_pk.lattice.clone_line())
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&peer_e_pq.ss)
                     .encrypt(&mut [])
@@ -290,6 +286,7 @@ impl State {
                     StateEphemeral {
                         symmetric_state: symmetric_state,
                         e_sk: e_sk,
+                        e_pk: e_pk,
                     },
                     Concat(Concat(e_pk_c, peer_e_pq.ct), tag),
                 ))
@@ -314,16 +311,17 @@ impl StateEphemeral {
             StateEphemeral {
                 symmetric_state,
                 e_sk,
+                e_pk,
             } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
-                let e_ss = PkLattice::decapsulate(&e_sk.lattice, &e_ct);
+                let e_ss = PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &e_ct);
                 let mut encrypted_s_pk = Encrypted::new(compress(&s_pk, rng));
-                let peer_e_pq = peer_e_pk.lattice.encapsulate();
+                let peer_e_pq = peer_e_pk.lattice.encapsulate(rng);
                 let mut encrypted_peer_e_ct = Encrypted::new(peer_e_pq.ct);
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&peer_e_pk_c.elliptic)
-                    .mix_hash(&peer_e_pk.lattice.as_ref())
+                    .mix_hash(&peer_e_pk.lattice.clone_line())
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&e_ss)
                     .decrypt(&mut [], tag)?
@@ -346,16 +344,21 @@ impl StateEphemeral {
         }
     }
 
-    pub fn consume(
+    pub fn consume<R>(
         self,
         message: Message2,
+        rng: &mut R,
         s_pk: &PublicKey,
-    ) -> Result<(StateFinal, PublicKey, Message3), ()> {
+    ) -> Result<(StateFinal, PublicKey, Message3), ()>
+    where
+        R: rand::Rng,
+    {
         let Concat(Concat(mut encrypted_peer_s_pk, mut encrypted_e_ct), mut tag) = message;
         match self {
             StateEphemeral {
                 symmetric_state,
                 e_sk,
+                e_pk,
             } => {
                 let peer_s_pk_c;
                 let peer_s_pk;
@@ -372,13 +375,13 @@ impl StateEphemeral {
                     .mix_shared_secret({
                         peer_s_pk_c = encrypted_peer_s_pk.extract();
                         peer_s_pk = decompress(&peer_s_pk_c);
-                        let peer_s_pq = peer_s_pk.lattice.encapsulate();
+                        let peer_s_pq = peer_s_pk.lattice.encapsulate(rng);
                         encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
                         peer_s_ss = peer_s_pq.ss;
                         &Curve::compress(&peer_s_pk.elliptic.exp_ec(&e_sk.elliptic))
                     })
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&e_sk.lattice, &encrypted_e_ct.data).as_ref()
+                        PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &encrypted_e_ct.data).as_ref()
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt(encrypted_peer_s_ct.data.as_mut())
@@ -402,15 +405,18 @@ impl StateEphemeral {
 }
 
 impl StateFinal {
-    pub fn generate<R, P>(
+    pub fn generate<R, P, C>(
         self,
         message: Message3,
+        rng: &mut R,
         payload: P,
+        s_pk: &PublicKey,
         s_sk: &SecretKey,
         peer_s_pi: &PublicIdentity,
-    ) -> Result<(Cipher<Noise, R>, PublicKey, Message4<P>), ()>
+    ) -> Result<(Cipher<Noise, C>, PublicKey, Message4<P>), ()>
     where
-        R: Rotor<Noise>,
+        R: rand::Rng,
+        C: Rotor<Noise>,
         P: Line,
         Encrypted<P>: Line,
     {
@@ -428,12 +434,12 @@ impl StateFinal {
                         encrypted_peer_s_pk_lattice.tag,
                     )?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
+                        PkLattice::decapsulate(&s_pk.lattice, &s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt({
                         peer_s_pk_lattice = encrypted_peer_s_pk_lattice.extract();
-                        peer_s_pq = peer_s_pk_lattice.encapsulate();
+                        peer_s_pq = peer_s_pk_lattice.encapsulate(rng);
                         encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
                         encrypted_peer_s_ct.data.as_mut()
                     })
@@ -458,6 +464,7 @@ impl StateFinal {
     pub fn consume<R, P>(
         self,
         message: Message4<P>,
+        s_pk: &PublicKey,
         s_sk: &SecretKey,
     ) -> Result<(Cipher<Noise, R>, P), ()>
     where
@@ -471,7 +478,7 @@ impl StateFinal {
                 let cipher = symmetric_state
                     .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
+                        PkLattice::decapsulate(&s_pk.lattice, &s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
                     })
                     .decrypt(payload.data.as_mut(), payload.tag)?
                     .finish()
@@ -514,11 +521,11 @@ mod tests {
         let (i_state, message) = i_state.generate(&mut rng, &r_pi);
         let (r_state, message) = r_state.consume(message, &mut rng, &r_sk).unwrap();
         let (i_state, message) = i_state.generate(message, &mut rng, &i_sk, &i_pk).unwrap();
-        let (r_state, _i_pk, message) = r_state.consume(message, &r_pk).unwrap();
+        let (r_state, _i_pk, message) = r_state.consume(message, &mut rng, &r_pk).unwrap();
         let (mut i_cipher, _r_pk, message) = i_state
-            .generate::<SimpleRotor, _>(message, payload, &i_sk, &r_pi)
+            .generate::<_, _, SimpleRotor>(message, &mut rng, payload, &i_pk, &i_sk, &r_pi)
             .unwrap();
-        let (mut r_cipher, payload) = r_state.consume::<SimpleRotor, _>(message, &r_sk).unwrap();
+        let (mut r_cipher, payload) = r_state.consume::<SimpleRotor, _>(message, &r_pk, &r_sk).unwrap();
 
         assert_eq!(orig_b, payload);
         //assert_eq!(i_pk, _i_pk.as_ref());

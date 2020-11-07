@@ -10,7 +10,7 @@ name = "vru"
 path = "src/bin/vru.rs"
 
 [dependencies]
-rac = { path = "../rac" }
+rac = { version = "1.3" }
 vru-transport = { path = "../vru-transport" }
 rand = { version = "0.7" }
 tokio = { version = "0.3", features = ["rt-multi-thread", "io-util", "sync", "net", "io-std", "macros", "stream", "signal"] }

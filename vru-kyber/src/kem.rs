@@ -36,7 +36,7 @@ where
     SkFull<W>: LineValid,
 {
     type PublicKey = PublicKey<S, W>;
-    type SecretKey = Concat<Concat<SecretKey<S, W>, GenericArray<u8, typenum::U32>>, PublicKey<S, W>>;
+    type SecretKey = SkFull<W>;
     type CipherText = CipherText<S, W>;
     type PairSeedLength = typenum::U64;
     type PublicKeyHashLength = typenum::U32;

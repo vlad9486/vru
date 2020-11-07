@@ -7,9 +7,11 @@ license = "Apache-2.0"
 repository = "https://github.com/vlad9486/vru"
 
 [dependencies]
-rac = { path = "../rac", features = ["curve25519-dalek"] }
+rac = { version = "1.3", features = ["curve25519-dalek"] }
 vru-noise = { path = "../vru-noise" }
 vru-sphinx = { path = "../vru-sphinx", features = ["serde"] }
+vru-kyber = { path = "../vru-kyber" }
+
 serde = { version = "1.0" }
 tirse = { version = "0.6", features = ["use_std"] }
 
@@ -24,12 +26,6 @@ sha2 = { version = "0.9" }
 sha3 = { version = "0.9" }
 chacha20 = { version = "0.6" }
 hmac = { version = "0.10" }
-
-pqcrypto-traits = { version = "0.3" }
-num-bigint = { version = "0.3" }
-num-traits = { version = "0.2" }
-[target.'cfg(not(target_arch = "aarch64"))'.dependencies]
-pqcrypto-kyber = { version = "0.6" }
 
 [dev-dependencies]
 hex = { version = "0.4" }

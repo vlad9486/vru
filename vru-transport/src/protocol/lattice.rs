@@ -1,206 +1,24 @@
-use std::{convert::TryFrom, ops::Add};
+use std::ops::Add;
 use rac::{
-    LineValid, Line,
-    generic_array::{GenericArray, typenum},
+    LineValid, Line, Concat,
+    generic_array::{GenericArray, sequence::GenericSequence, typenum},
 };
-use num_traits::ToPrimitive;
-use num_bigint::{ToBigUint, BigUint};
-use pqcrypto_traits::kem::{PublicKey as _, SharedSecret as _, Ciphertext as _};
+use sha3::{Sha3_256, digest::{Update, FixedOutput}};
+use vru_kyber::{Kyber, Kem};
 
-#[cfg(not(target_arch = "aarch64"))]
-use pqcrypto_kyber::kyber768;
+type PkLatticeL = <typenum::U1024 as Add<typenum::U64>>::Output;
 
-#[cfg(target_arch = "aarch64")]
-mod dummy {
-    use pqcrypto_traits::{kem, Error};
-
-    #[derive(Clone, Copy)]
-    pub struct PublicKey([u8; 1184]);
-
-    impl kem::PublicKey for PublicKey {
-        /// Get this object as a byte slice
-        #[inline]
-        fn as_bytes(&self) -> &[u8] {
-            &self.0
-        }
-
-        /// Construct this object from a byte slice
-        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-            if bytes.len() != std::mem::size_of::<Self>() {
-                Err(Error::BadLength {
-                    name: "",
-                    actual: bytes.len(),
-                    expected: std::mem::size_of::<Self>(),
-                })
-            } else {
-                let mut array = [0u8; std::mem::size_of::<Self>()];
-                array.copy_from_slice(bytes);
-                Ok(PublicKey(array))
-            }
-        }
-    }
-
-    #[derive(Clone, Copy)]
-    pub struct SecretKey([u8; 2400]);
-
-    impl kem::SecretKey for SecretKey {
-        /// Get this object as a byte slice
-        #[inline]
-        fn as_bytes(&self) -> &[u8] {
-            &self.0
-        }
-
-        /// Construct this object from a byte slice
-        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-            if bytes.len() != std::mem::size_of::<Self>() {
-                Err(Error::BadLength {
-                    name: "",
-                    actual: bytes.len(),
-                    expected: std::mem::size_of::<Self>(),
-                })
-            } else {
-                let mut array = [0u8; std::mem::size_of::<Self>()];
-                array.copy_from_slice(bytes);
-                Ok(SecretKey(array))
-            }
-        }
-    }
-
-    #[derive(Clone, Copy)]
-    pub struct Ciphertext([u8; 1088]);
-
-    impl kem::Ciphertext for Ciphertext {
-        /// Get this object as a byte slice
-        #[inline]
-        fn as_bytes(&self) -> &[u8] {
-            &self.0
-        }
-
-        /// Construct this object from a byte slice
-        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-            if bytes.len() != std::mem::size_of::<Self>() {
-                Err(Error::BadLength {
-                    name: "",
-                    actual: bytes.len(),
-                    expected: std::mem::size_of::<Self>(),
-                })
-            } else {
-                let mut array = [0u8; std::mem::size_of::<Self>()];
-                array.copy_from_slice(bytes);
-                Ok(Ciphertext(array))
-            }
-        }
-    }
-
-    #[derive(Clone, Copy)]
-    pub struct SharedSecret([u8; 32]);
-
-    impl kem::SharedSecret for SharedSecret {
-        /// Get this object as a byte slice
-        #[inline]
-        fn as_bytes(&self) -> &[u8] {
-            &self.0
-        }
-
-        /// Construct this object from a byte slice
-        fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-            if bytes.len() != std::mem::size_of::<Self>() {
-                Err(Error::BadLength {
-                    name: "",
-                    actual: bytes.len(),
-                    expected: std::mem::size_of::<Self>(),
-                })
-            } else {
-                let mut array = [0u8; std::mem::size_of::<Self>()];
-                array.copy_from_slice(bytes);
-                Ok(SharedSecret(array))
-            }
-        }
-    }
-
-    pub fn keypair() -> (PublicKey, SecretKey) {
-        unimplemented!()
-    }
-
-    pub fn encapsulate(pk: &PublicKey) -> (SharedSecret, Ciphertext) {
-        unimplemented!()
-    }
-
-    pub fn decapsulate(ct: &Ciphertext, sk: &SecretKey) -> SharedSecret {
-        unimplemented!()
-    }
-}
-
-#[cfg(target_arch = "aarch64")]
-use dummy as kyber768;
-
-const KYBER_Q: u16 = 3329;
-
-// 1124 * 8 - log2(53 * 3329 ^ 768) < 0.0014963977155275644
-const KYBER768_PACKED_POLY_PADDING: u16 = 53;
-const KYBER768_PACKED_POLY_SIZE: usize = 1124;
-const KYBER768_PACKED_SIZE: usize = KYBER768_PACKED_POLY_SIZE + 32;
-
-fn pack_kyber768(pk: &[u8], padding: u16) -> [u8; KYBER768_PACKED_SIZE] {
-    assert!(pk.len() == 768 / 2 * 3 + 32);
-
-    let mut i = 0u8.to_biguint().unwrap();
-    for t in pk[..(768 / 2 * 3)].chunks(3) {
-        let c0 = t[0] as u16 | (((t[1] & 0x0f) as u16) << 8);
-        let c1 = (t[1] >> 4) as u16 | ((t[2] as u16) << 4);
-        assert!(c0 < KYBER_Q && c1 < KYBER_Q);
-        i *= KYBER_Q;
-        i += c0;
-        i *= KYBER_Q;
-        i += c1;
-    }
-    i *= KYBER768_PACKED_POLY_PADDING;
-    i += padding % KYBER768_PACKED_POLY_PADDING;
-
-    let v = i.to_bytes_le();
-    assert!(v.len() <= KYBER768_PACKED_POLY_SIZE);
-    let mut r = [0; KYBER768_PACKED_SIZE];
-    r[0..v.len()].clone_from_slice(v.as_ref());
-    r[KYBER768_PACKED_POLY_SIZE..].clone_from_slice(&pk[(768 / 2 * 3)..]);
-    r
-}
-
-fn unpack_kyber768(packed: &[u8; KYBER768_PACKED_SIZE]) -> [u8; 768 / 2 * 3 + 32] {
-    let mut q = BigUint::from_bytes_le(&packed[..KYBER768_PACKED_POLY_SIZE]);
-
-    let mut pk = [0; 768 / 2 * 3 + 32];
-    q /= KYBER768_PACKED_POLY_PADDING;
-    for i in (0..(768 / 2)).rev() {
-        let c1 = (&q % KYBER_Q).to_u16().unwrap();
-        q /= KYBER_Q;
-        let c0 = (&q % KYBER_Q).to_u16().unwrap();
-        q /= KYBER_Q;
-
-        pk[i * 3 + 0] = (c0 & 0xff) as u8;
-        pk[i * 3 + 1] = ((c0 >> 8) as u8) | (((c1 & 0x0f) as u8) << 4);
-        pk[i * 3 + 2] = (c1 >> 4) as u8;
-    }
-
-    pk[(768 / 2 * 3)..].clone_from_slice(&packed[KYBER768_PACKED_POLY_SIZE..]);
-    pk
-}
-
-#[derive(Clone)]
-pub struct PkLattice(kyber768::PublicKey);
+pub struct PkLattice(Concat<GenericArray<u8, PkLatticeL>, GenericArray<u8, typenum::U32>>);
 
 impl LineValid for PkLattice {
-    type Length = <typenum::U1024 as Add<typenum::U160>>::Output;
+    type Length = <typenum::U1024 as Add<typenum::U96>>::Output;
 
     fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
-        Ok(PkLattice(
-            kyber768::PublicKey::from_bytes(a.as_slice()).unwrap(),
-        ))
+        Concat::try_clone_array(a).map(PkLattice)
     }
 
     fn clone_line(&self) -> GenericArray<u8, Self::Length> {
-        let mut r = GenericArray::default();
-        r.as_mut_slice().clone_from_slice(self.as_ref());
-        r
+        self.0.clone_line()
     }
 }
 
@@ -210,14 +28,20 @@ impl Line for PkLattice {
     }
 }
 
-#[derive(Clone)]
-pub struct SkLattice(kyber768::SecretKey);
+impl Clone for PkLattice {
+    fn clone(&self) -> Self {
+        Self::clone_array(&self.clone_line())
+    }
+}
 
-pub type PkLatticeCl = <typenum::U1024 as Add<typenum::U132>>::Output;
+#[derive(Clone)]
+pub struct SkLattice(GenericArray<u8, <typenum::U1024 as Add<typenum::U256>>::Output>);
+
+pub type PkLatticeCl = <typenum::U1024 as Add<typenum::U64>>::Output;
 
 pub type PkLatticeCompressed = GenericArray<u8, PkLatticeCl>;
 
-pub type CipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U64>>::Output>;
+pub type CipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U128>>::Output>;
 
 pub type SharedSecret = GenericArray<u8, typenum::U32>;
 
@@ -227,52 +51,51 @@ pub struct Encapsulated {
 }
 
 impl PkLattice {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
-        kyber768::PublicKey::from_bytes(bytes)
-            .map(PkLattice)
-            .map_err(|_| ())
-    }
-
     pub fn compress<R>(&self, rng: &mut R) -> PkLatticeCompressed
     where
         R: rand::Rng,
     {
-        let padding = loop {
-            let p = rng.gen();
-            if p & 0b111111 < KYBER768_PACKED_POLY_PADDING {
-                break p;
-            }
-        };
-        GenericArray::from_slice(pack_kyber768(self.0.as_bytes(), padding).as_ref()).clone()
+        let _ = rng;
+        self.0.0.clone()
     }
 
     pub fn decompress(c: &PkLatticeCompressed) -> Self {
-        let data = unpack_kyber768(TryFrom::try_from(c.as_slice()).unwrap());
-        PkLattice(kyber768::PublicKey::from_bytes(data.as_ref()).unwrap())
+        let hash = Sha3_256::default().chain(&c).finalize_fixed();
+        PkLattice(Concat(c.clone(), hash))
     }
 
-    pub fn key_pair() -> (SkLattice, Self) {
-        let (pk, sk) = kyber768::keypair();
-        (SkLattice(sk), PkLattice(pk))
+    pub fn hash(&self) -> GenericArray<u8, typenum::U32> {
+        self.0.1.clone()
     }
 
-    pub fn encapsulate(&self) -> Encapsulated {
-        let (ss, ct) = kyber768::encapsulate(&self.0);
+    pub fn key_pair<R>(rng: &mut R) -> (SkLattice, Self)
+    where
+        R: rand::Rng,
+    {
+        let seed = GenericArray::generate(|_| rng.gen());
+        let (pk, sk) = <Kyber<typenum::U3> as Kem>::generate_pair(&seed);
+        let pk_bytes = pk.clone_line();
+        let hash = Sha3_256::default().chain(&pk_bytes).finalize_fixed();
+
+        (SkLattice(sk.0.clone_line()), PkLattice(Concat(pk_bytes, hash)))
+    }
+
+    pub fn encapsulate<R>(&self, rng: &mut R) -> Encapsulated
+    where
+        R: rand::Rng,
+    {
+        let seed = GenericArray::generate(|_| rng.gen());
+        let pk = Line::clone_array(&self.0.0);
+        let (ct, ss) = <Kyber<typenum::U3> as Kem>::encapsulate(&seed, &pk, &self.0.1);
         Encapsulated {
-            ss: GenericArray::from_slice(ss.as_bytes()).clone(),
-            ct: GenericArray::from_slice(ct.as_bytes()).clone(),
+            ss: ss,
+            ct: ct.clone_line(),
         }
     }
 
-    pub fn decapsulate(sk: &SkLattice, ct: &CipherText) -> SharedSecret {
-        let ct = kyber768::Ciphertext::from_bytes(ct.as_ref()).unwrap();
-        let ss = kyber768::decapsulate(&ct, &sk.0);
-        GenericArray::from_slice(ss.as_bytes()).clone()
-    }
-}
-
-impl AsRef<[u8]> for PkLattice {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_bytes()
+    pub fn decapsulate(&self, sk: &SkLattice, ct: &CipherText) -> SharedSecret {
+        let pk = Line::clone_array(&self.0.0);
+        let sk = Concat(Line::clone_array(&sk.0), pk);
+        <Kyber<typenum::U3> as Kem>::decapsulate(&sk, &self.0.1, &Line::clone_array(&ct))
     }
 }
