@@ -3,7 +3,7 @@ use curve25519_dalek::{edwards::EdwardsPoint, scalar::Scalar};
 use vru_noise::{SymmetricState, Cipher, Unidirectional, Rotor, ChainingKey, Key, Tag};
 use rac::{
     LineValid, Line, Concat, Curve,
-    generic_array::{GenericArray, sequence::GenericSequence, typenum},
+    generic_array::{GenericArray, typenum},
 };
 use serde::{Serialize, Deserialize};
 use super::lattice::{PkLattice, SkLattice, PkLatticeCl, PkLatticeCompressed, CipherText};
@@ -25,9 +25,15 @@ impl PublicKey {
     where
         R: rand::Rng,
     {
-        let e_sk = Scalar::try_clone_array(&GenericArray::generate(|_| rng.gen())).unwrap();
+        let mut seed = [0; 96];
+        rng.fill_bytes(seed.as_mut());
+        Self::key_pair_fixed(seed)
+    }
+
+    pub fn key_pair_fixed(secret: [u8; 96]) -> (SecretKey, Self) {
+        let e_sk = Scalar::try_clone_array(&GenericArray::from_slice(&secret[..32])).unwrap();
         let e_pk = EdwardsPoint::base().exp_ec(&e_sk);
-        let (pq_sk, pq_pk) = PkLattice::key_pair(rng);
+        let (pq_sk, pq_pk) = PkLattice::key_pair(GenericArray::from_slice(&secret[32..]));
 
         (
             SecretKey {

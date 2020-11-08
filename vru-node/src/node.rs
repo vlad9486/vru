@@ -54,7 +54,6 @@ pub async fn run<S>(ake_sk: SecretKey, ake_pk: PublicKey, mut control: S)
 where
     S: Unpin + Stream<Item = Command>,
 {
-    //let mut control = breakable::b(control);
     let (c_tx, mut c_rx) = mpsc::unbounded_channel::<connection::Connection>();
     let mut connections = Vec::new();
     let (terminate_sender, mut trx) = terminate::channel();

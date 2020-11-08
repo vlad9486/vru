@@ -68,12 +68,8 @@ impl PkLattice {
         self.0.1.clone()
     }
 
-    pub fn key_pair<R>(rng: &mut R) -> (SkLattice, Self)
-    where
-        R: rand::Rng,
-    {
-        let seed = GenericArray::generate(|_| rng.gen());
-        let (pk, sk) = <Kyber<typenum::U3> as Kem>::generate_pair(&seed);
+    pub fn key_pair(seed: &GenericArray<u8, typenum::U64>) -> (SkLattice, Self) {
+        let (pk, sk) = <Kyber<typenum::U3> as Kem>::generate_pair(seed);
         let pk_bytes = pk.clone_line();
         let hash = Sha3_256::default().chain(&pk_bytes).finalize_fixed();
 
