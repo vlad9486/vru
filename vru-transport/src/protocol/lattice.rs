@@ -1,14 +1,25 @@
-use std::ops::Add;
+use std::{ops::Add, fmt};
 use rac::{
     LineValid, Line, Concat,
     generic_array::{GenericArray, sequence::GenericSequence, typenum},
 };
-use sha3::{Sha3_256, digest::{Update, FixedOutput}};
+use sha3::{
+    Sha3_256,
+    digest::{Update, FixedOutput},
+};
 use vru_kyber::{Kyber, Kem};
 
 type PkLatticeL = <typenum::U1024 as Add<typenum::U64>>::Output;
 
 pub struct PkLattice(Concat<GenericArray<u8, PkLatticeL>, GenericArray<u8, typenum::U32>>);
+
+impl fmt::Debug for PkLattice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("PublicKey")
+            .field(&hex::encode(self.clone_line()))
+            .finish()
+    }
+}
 
 impl LineValid for PkLattice {
     type Length = <typenum::U1024 as Add<typenum::U96>>::Output;
@@ -56,7 +67,7 @@ impl PkLattice {
         R: rand::Rng,
     {
         let _ = rng;
-        self.0.0.clone()
+        self.0 .0.clone()
     }
 
     pub fn decompress(c: &PkLatticeCompressed) -> Self {
@@ -65,7 +76,7 @@ impl PkLattice {
     }
 
     pub fn hash(&self) -> GenericArray<u8, typenum::U32> {
-        self.0.1.clone()
+        self.0 .1.clone()
     }
 
     pub fn key_pair(seed: &GenericArray<u8, typenum::U64>) -> (SkLattice, Self) {
@@ -73,7 +84,10 @@ impl PkLattice {
         let pk_bytes = pk.clone_line();
         let hash = Sha3_256::default().chain(&pk_bytes).finalize_fixed();
 
-        (SkLattice(sk.0.clone_line()), PkLattice(Concat(pk_bytes, hash)))
+        (
+            SkLattice(sk.0.clone_line()),
+            PkLattice(Concat(pk_bytes, hash)),
+        )
     }
 
     pub fn encapsulate<R>(&self, rng: &mut R) -> Encapsulated
@@ -81,8 +95,8 @@ impl PkLattice {
         R: rand::Rng,
     {
         let seed = GenericArray::generate(|_| rng.gen());
-        let pk = Line::clone_array(&self.0.0);
-        let (ct, ss) = <Kyber<typenum::U3> as Kem>::encapsulate(&seed, &pk, &self.0.1);
+        let pk = Line::clone_array(&self.0 .0);
+        let (ct, ss) = <Kyber<typenum::U3> as Kem>::encapsulate(&seed, &pk, &self.0 .1);
         Encapsulated {
             ss: ss,
             ct: ct.clone_line(),
@@ -90,8 +104,8 @@ impl PkLattice {
     }
 
     pub fn decapsulate(&self, sk: &SkLattice, ct: &CipherText) -> SharedSecret {
-        let pk = Line::clone_array(&self.0.0);
+        let pk = Line::clone_array(&self.0 .0);
         let sk = Concat(Line::clone_array(&sk.0), pk);
-        <Kyber<typenum::U3> as Kem>::decapsulate(&sk, &self.0.1, &Line::clone_array(&ct))
+        <Kyber<typenum::U3> as Kem>::decapsulate(&sk, &self.0 .1, &Line::clone_array(&ct))
     }
 }

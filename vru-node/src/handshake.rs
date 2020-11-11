@@ -19,7 +19,9 @@ where
     Message4<L>: Line,
 {
     let state = State::new(&peer_pi);
-    let (state, message) = state.generate(&mut rand::thread_rng(), &peer_pi);
+    let (state, message) = state
+        .generate(&mut rand::thread_rng(), &peer_pi)
+        .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
     let (state, message) = state

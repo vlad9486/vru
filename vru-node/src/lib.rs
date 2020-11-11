@@ -6,10 +6,8 @@ mod terminate;
 
 mod handshake;
 
-mod connection;
-
 mod process;
 pub use self::process::LocalCommand;
 
 mod node;
-pub use self::node::{run, Command};
+pub use self::node::{run, Command, OutgoingEvent};

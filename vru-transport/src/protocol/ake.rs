@@ -8,7 +8,7 @@ use rac::{
 use serde::{Serialize, Deserialize};
 use super::lattice::{PkLattice, SkLattice, PkLatticeCl, PkLatticeCompressed, CipherText};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PublicKey {
     elliptic: EdwardsPoint,
     lattice: PkLattice,
@@ -91,16 +91,16 @@ fn decompress(pk_c: &PublicKeyCompressed) -> PublicKey {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PublicIdentity {
-    elliptic: EdwardsPoint,
+    elliptic: GenericArray<u8, <EdwardsPoint as Curve>::CompressedLength>,
     lattice: GenericArray<u8, typenum::U32>,
 }
 
 impl PublicIdentity {
     pub fn new(pk: &PublicKey) -> Self {
         PublicIdentity {
-            elliptic: pk.elliptic.clone(),
+            elliptic: Curve::compress(&pk.elliptic),
             lattice: pk.lattice.hash(),
         }
     }
@@ -127,7 +127,7 @@ impl FromStr for PublicIdentity {
         let mut lattice_array = GenericArray::default();
         lattice_array.as_mut_slice().clone_from_slice(&bytes[34..]);
         Ok(PublicIdentity {
-            elliptic: EdwardsPoint::try_clone_array(&elliptic_array).unwrap(),
+            elliptic: elliptic_array,
             lattice: lattice_array,
         })
     }
@@ -224,12 +224,16 @@ impl State {
         State {
             symmetric_state: SymmetricState::new("Noise_XK_25519+Kyber_ChaChaPoly_SHA256")
                 .mix_hash(b"vru")
-                .mix_hash(&Curve::compress(&s_pi.elliptic))
+                .mix_hash(&s_pi.elliptic)
                 .mix_hash(s_pi.lattice.as_ref()),
         }
     }
 
-    pub fn generate<R>(self, rng: &mut R, peer_s_pi: &PublicIdentity) -> (StateEphemeral, Message0)
+    pub fn generate<R>(
+        self,
+        rng: &mut R,
+        peer_s_pi: &PublicIdentity,
+    ) -> Result<(StateEphemeral, Message0), ()>
     where
         R: rand::Rng,
     {
@@ -237,23 +241,24 @@ impl State {
             State { symmetric_state } => {
                 let (e_sk, e_pk) = PublicKey::key_pair(rng);
                 let e_pk_c = compress(&e_pk, rng);
+                let peer_s_pk_elliptic: EdwardsPoint = Curve::decompress(&peer_s_pi.elliptic)?;
                 let mut tag = GenericArray::default();
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&e_pk_c.elliptic)
                     .mix_hash(&e_pk.lattice.clone_line())
-                    .mix_shared_secret(&Curve::compress(&peer_s_pi.elliptic.exp_ec(&e_sk.elliptic)))
+                    .mix_shared_secret(&Curve::compress(&peer_s_pk_elliptic.exp_ec(&e_sk.elliptic)))
                     .encrypt(&mut [])
                     .destruct(|t| tag = t);
 
-                (
+                Ok((
                     StateEphemeral {
                         symmetric_state: symmetric_state,
                         e_sk: e_sk,
                         e_pk: e_pk,
                     },
                     Concat(e_pk_c, tag),
-                )
+                ))
             },
         }
     }
@@ -387,7 +392,8 @@ impl StateEphemeral {
                         &Curve::compress(&peer_s_pk.elliptic.exp_ec(&e_sk.elliptic))
                     })
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &encrypted_e_ct.data).as_ref()
+                        PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &encrypted_e_ct.data)
+                            .as_ref()
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt(encrypted_peer_s_ct.data.as_mut())
@@ -440,7 +446,12 @@ impl StateFinal {
                         encrypted_peer_s_pk_lattice.tag,
                     )?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&s_pk.lattice, &s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
+                        PkLattice::decapsulate(
+                            &s_pk.lattice,
+                            &s_sk.lattice,
+                            &encrypted_s_ct.extract(),
+                        )
+                        .as_ref()
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt({
@@ -456,7 +467,7 @@ impl StateFinal {
                     .finish();
 
                 let peer_s_pk = PublicKey {
-                    elliptic: peer_s_pi.elliptic.clone(),
+                    elliptic: Curve::decompress(&peer_s_pi.elliptic)?,
                     lattice: peer_s_pk_lattice,
                 };
                 if peer_s_pi.ne(&PublicIdentity::new(&peer_s_pk)) {
@@ -484,7 +495,12 @@ impl StateFinal {
                 let cipher = symmetric_state
                     .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&s_pk.lattice, &s_sk.lattice, &encrypted_s_ct.extract()).as_ref()
+                        PkLattice::decapsulate(
+                            &s_pk.lattice,
+                            &s_sk.lattice,
+                            &encrypted_s_ct.extract(),
+                        )
+                        .as_ref()
                     })
                     .decrypt(payload.data.as_mut(), payload.tag)?
                     .finish()
@@ -524,14 +540,16 @@ mod tests {
         let i_state = State::new(&r_pi);
         let r_state = State::new(&r_pi);
 
-        let (i_state, message) = i_state.generate(&mut rng, &r_pi);
+        let (i_state, message) = i_state.generate(&mut rng, &r_pi).unwrap();
         let (r_state, message) = r_state.consume(message, &mut rng, &r_sk).unwrap();
         let (i_state, message) = i_state.generate(message, &mut rng, &i_sk, &i_pk).unwrap();
         let (r_state, _i_pk, message) = r_state.consume(message, &mut rng, &r_pk).unwrap();
         let (mut i_cipher, _r_pk, message) = i_state
             .generate::<_, _, SimpleRotor>(message, &mut rng, payload, &i_pk, &i_sk, &r_pi)
             .unwrap();
-        let (mut r_cipher, payload) = r_state.consume::<SimpleRotor, _>(message, &r_pk, &r_sk).unwrap();
+        let (mut r_cipher, payload) = r_state
+            .consume::<SimpleRotor, _>(message, &r_pk, &r_sk)
+            .unwrap();
 
         assert_eq!(orig_b, payload);
         //assert_eq!(i_pk, _i_pk.as_ref());

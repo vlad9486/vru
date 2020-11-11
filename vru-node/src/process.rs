@@ -14,18 +14,27 @@ pub enum LocalCommand {
     Message(String),
 }
 
-pub async fn process(
+#[derive(Debug)]
+pub enum LocalEvent {
+    _N,
+}
+
+pub async fn process<F>(
     trx: terminate::Receiver,
-    rx: mpsc::UnboundedReceiver<LocalCommand>,
+    erx: mpsc::UnboundedReceiver<LocalCommand>,
+    etx: F,
     stream: TcpStream,
     cipher: SimpleCipher,
     address: SocketAddr,
     peer: PublicKey,
-) {
+) where
+    F: Fn(LocalEvent) + Clone + Send + 'static,
+{
     type NetworkMessage = GenericArray<u8, typenum::U1024>;
 
     let mut trx = trx;
-    let mut rx = rx;
+    let mut erx = erx;
+    let _ = etx;
     let mut stream = stream;
     let (mut n_rx, mut n_tx) = stream.split();
     let SimpleCipher {
@@ -34,7 +43,7 @@ pub async fn process(
     } = cipher;
     let _ = peer;
     loop {
-        let command = rx.recv().fuse();
+        let command = erx.recv().fuse();
         let message = utils::read_ciphered::<_, NetworkMessage>(&mut receive, &mut n_rx).fuse();
         pin_mut!(command, message);
         let either = select! {

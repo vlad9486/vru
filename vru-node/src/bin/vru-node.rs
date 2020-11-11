@@ -1,7 +1,7 @@
 use std::{env, fs, convert::TryInto};
 use rand::Rng;
 use structopt::StructOpt;
-use vru_node::run;
+use vru_node::{run, OutgoingEvent};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::{
     io::{self, AsyncBufReadExt},
@@ -14,8 +14,10 @@ use tokio::{
 
 #[derive(StructOpt)]
 struct Opts {
-    #[structopt(long, short, default_value = "main")]
+    #[structopt(long, short)]
     name: String,
+    #[structopt(long, short)]
+    port: u16,
 }
 
 #[tokio::main]
@@ -63,6 +65,14 @@ async fn main() {
         }
     });
 
-    run(sk, pk, control_rx).await;
+    run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, |e| {
+        match e {
+            OutgoingEvent::Connection { peer_pi, address, .. } => {
+                tracing::info!("connection {:?} {}", address, peer_pi);
+            },
+            _ => (),
+        }
+    })
+    .await;
     fs::remove_file(control_path).unwrap();
 }

@@ -1,6 +1,15 @@
-use std::io;
+use std::{
+    io,
+    net::SocketAddr,
+    pin::Pin,
+    task::{Context, Poll},
+};
 use rac::{Line, generic_array::GenericArray};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    stream::Stream,
+};
 use vru_transport::protocol::SimpleUnidirectional;
 
 pub async fn read<T, L>(stream: &mut T) -> Result<L, io::Error>
@@ -57,4 +66,26 @@ where
     tracing::debug!(will_write = buffer.len() + tag.len());
     stream.write_all(buffer.as_ref()).await?;
     stream.write_all(tag.as_ref()).await
+}
+
+pin_project_lite::pin_project! {
+    #[must_use = "streams do nothing unless polled"]
+    pub struct TcpListenerStream {
+        #[pin]
+        inner: TcpListener,
+    }
+}
+
+impl TcpListenerStream {
+    pub fn new(inner: TcpListener) -> Self {
+        TcpListenerStream { inner: inner }
+    }
+}
+
+impl Stream for TcpListenerStream {
+    type Item = Result<(TcpStream, SocketAddr), io::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.project().inner.poll_accept(cx).map(Some)
+    }
 }

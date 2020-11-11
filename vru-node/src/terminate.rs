@@ -1,9 +1,9 @@
-use std::future::Future;
+use std::{future::Future, mem};
 use futures::{
     future::{FutureExt, Either, select, poll_fn},
     pin_mut,
 };
-use tokio::{sync::oneshot, task::JoinHandle};
+use tokio::{sync::oneshot, task::JoinHandle, signal::ctrl_c};
 
 pub struct Sender {
     inner: oneshot::Sender<()>,
@@ -12,6 +12,16 @@ pub struct Sender {
 pub struct Receiver {
     inner: oneshot::Receiver<()>,
     items: Vec<(Sender, JoinHandle<()>)>,
+}
+
+pub fn channel_ctrlc() -> Receiver {
+    let (tx, rx) = channel();
+    tokio::spawn(async move {
+        ctrl_c().await.unwrap();
+        tx.terminate()
+    });
+
+    rx
 }
 
 pub fn channel() -> (Sender, Receiver) {
@@ -63,8 +73,8 @@ impl Receiver {
         match select(inner, f).await {
             Either::Left((_, f)) => {
                 let _ = f;
-                tracing::info!("propagating termination signal from {:#?} to {}", (self as *mut Self), self.items.len());
-                let items = std::mem::replace(&mut self.items, Vec::new());
+                tracing::info!("propagating termination signal to {}", self.items.len());
+                let items = mem::replace(&mut self.items, Vec::new());
                 for (sender, handle) in items {
                     sender.terminate();
                     handle.await.unwrap();
