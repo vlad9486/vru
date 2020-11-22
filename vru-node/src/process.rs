@@ -50,14 +50,12 @@ pub async fn process<F>(
             },
         };
         match either {
-            Either::Right(Ok(message)) => {
-                match message {
-                    Message::Arbitrary(bytes) => {
-                        let string = String::from_utf8(bytes).unwrap();
-                        tracing::info!("received message: {:?}", string)
-                    },
-                    _ => (),
-                }
+            Either::Right(Ok(message)) => match message {
+                Message::Arbitrary(bytes) => {
+                    let string = String::from_utf8(bytes).unwrap();
+                    tracing::info!("received message: {:?}", string)
+                },
+                _ => (),
             },
             Either::Right(Err(error)) => {
                 let _ = error;

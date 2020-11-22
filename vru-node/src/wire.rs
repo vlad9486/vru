@@ -96,10 +96,13 @@ impl Message {
                     signature[..p].clone_from_slice(pos);
                     signature[p..].clone_from_slice(&buffer[0..(2701 - p)]);
                     signature
-                }
+                },
             })),
             3 => Ok(Message::Close(read_safe!(&mut pos, 32)?)),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Cannot decode message, bad tag")),
+            _ => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Cannot decode message, bad tag",
+            )),
         }
     }
 

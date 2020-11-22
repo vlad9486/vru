@@ -50,7 +50,13 @@ async fn main() {
     let path = control_path.clone();
     tokio::spawn(async move {
         fs::remove_file(control_path)
-            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() { Ok(()) } else { Err(e) })
+            .or_else(|e| {
+                if let io::ErrorKind::NotFound = e.kind() {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
             .unwrap();
         let listener = UnixListener::bind(path).unwrap();
         loop {
@@ -68,13 +74,13 @@ async fn main() {
         }
     });
 
-    run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, |e| {
-        match e {
-            OutgoingEvent::Connection { peer_pi, address, .. } => {
-                tracing::info!("connection {:?} {}", address, peer_pi);
-            },
-            _ => (),
-        }
-    })
-    .await;
+    let etx = |e| match e {
+        OutgoingEvent::Connection {
+            peer_pi, address, ..
+        } => {
+            tracing::info!("connection {:?} {}", address, peer_pi);
+        },
+        _ => (),
+    };
+    run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, etx).await;
 }
