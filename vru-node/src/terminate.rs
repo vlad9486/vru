@@ -53,15 +53,6 @@ impl Receiver {
         self.items.push((tx, handle));
     }
 
-    pub async fn should(&mut self) {
-        let _ = poll_fn(|cx| self.inner.poll_unpin(cx)).await;
-        let items = std::mem::replace(&mut self.items, Vec::new());
-        for (sender, handle) in items {
-            sender.terminate();
-            handle.await.unwrap();
-        }
-    }
-
     pub async fn check<F, T>(&mut self, f: F) -> Option<T>
     where
         F: Future<Output = T>,

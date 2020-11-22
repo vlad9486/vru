@@ -37,7 +37,7 @@ impl FromStr for Command {
                 let peer_pi = words.next().ok_or(())?.parse().map_err(|_| ())?;
                 let message = words.next().ok_or(())?.to_string();
                 Ok(Command::Local {
-                    command: process::LocalCommand::Message(message),
+                    command: process::LocalCommand::SendText(message),
                     peer_pi: peer_pi,
                 })
             },
@@ -51,16 +51,15 @@ enum IncomingEvent {
     Connection((TcpStream, SocketAddr)),
 }
 
-#[derive(Debug)]
 pub enum OutgoingEvent {
     Connection {
         peer_pk: PublicKey,
         peer_pi: PublicIdentity,
         address: SocketAddr,
     },
-    Local {
+    Event {
         peer_pi: PublicIdentity,
-        event: process::LocalEvent,
+        event: process::LocalOutgoingEvent,
     },
 }
 
@@ -73,8 +72,8 @@ impl OutgoingEvent {
         }
     }
 
-    fn local(peer_pi: &PublicIdentity, event: process::LocalEvent) -> Self {
-        OutgoingEvent::Local {
+    fn local(peer_pi: &PublicIdentity, event: process::LocalOutgoingEvent) -> Self {
+        OutgoingEvent::Event {
             peer_pi: peer_pi.clone(),
             event: event,
         }

@@ -1,7 +1,7 @@
 use std::{env, fs, convert::TryInto};
 use rand::Rng;
 use structopt::StructOpt;
-use vru_node::{run, OutgoingEvent};
+use vru_node::{run, OutgoingEvent, LocalOutgoingEvent};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::{
     io::{self, AsyncBufReadExt},
@@ -80,7 +80,10 @@ async fn main() {
         } => {
             tracing::info!("connection {:?} {}", address, peer_pi);
         },
-        _ => (),
+        OutgoingEvent::Event {
+            peer_pi,
+            event: LocalOutgoingEvent::ReceivedText(string),
+        } => tracing::info!("received {} {:?}", peer_pi, string),
     };
     run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, etx).await;
 }
