@@ -3,7 +3,6 @@
 mod utils;
 
 mod wire;
-pub use self::wire::{Message, Invoice, Contract};
 
 mod terminate;
 
