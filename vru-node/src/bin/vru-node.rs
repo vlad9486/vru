@@ -49,6 +49,9 @@ async fn main() {
     let (control_tx, control_rx) = mpsc::channel(1);
     let path = control_path.clone();
     tokio::spawn(async move {
+        fs::remove_file(control_path)
+            .or_else(|e| if let io::ErrorKind::NotFound = e.kind() { Ok(()) } else { Err(e) })
+            .unwrap();
         let listener = UnixListener::bind(path).unwrap();
         loop {
             let (stream, _) = select! {
@@ -74,5 +77,4 @@ async fn main() {
         }
     })
     .await;
-    fs::remove_file(control_path).unwrap();
 }

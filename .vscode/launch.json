@@ -3,19 +3,19 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'vru'",
+            "name": "Debug executable 'vru-node'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=vru",
+                    "--bin=vru-node",
                     "--package=vru-node"
                 ],
                 "filter": {
-                    "name": "vru",
+                    "name": "vru-node",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["-n", "b", "-p", "8225"],
             "cwd": "${workspaceFolder}"
         }    
     ]

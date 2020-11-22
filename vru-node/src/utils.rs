@@ -42,13 +42,7 @@ where
     T: Unpin + AsyncReadExt,
 {
     let mut buffer = GenericArray::default();
-    let mut tag = GenericArray::default();
-    stream.read_exact(buffer.as_mut()).await?;
-    stream.read_exact(tag.as_mut()).await?;
-    cipher
-        .decrypt(b"vru", buffer.as_mut(), &tag)
-        .map_err(|()| io::Error::new(io::ErrorKind::Other, "MAC mismatch"))?;
-    tracing::debug!(read = buffer.len() + tag.len());
+    read_all(cipher, stream, buffer.as_mut()).await?;
     Ok(L::clone_array(&buffer))
 }
 
@@ -61,7 +55,35 @@ where
     L: Line,
     T: Unpin + AsyncWriteExt,
 {
-    let mut buffer = line.clone_line();
+    write_all(cipher, stream, line.clone_line().as_mut()).await
+}
+
+pub async fn read_all<T>(
+    cipher: &mut SimpleUnidirectional,
+    stream: &mut T,
+    buffer: &mut [u8],
+) -> Result<(), io::Error>
+where
+    T: Unpin + AsyncReadExt,
+{
+    let mut tag = GenericArray::default();
+    stream.read_exact(buffer.as_mut()).await?;
+    stream.read_exact(tag.as_mut()).await?;
+    cipher
+        .decrypt(b"vru", buffer.as_mut(), &tag)
+        .map_err(|()| io::Error::new(io::ErrorKind::Other, "MAC mismatch"))?;
+    tracing::debug!(read = buffer.len() + tag.len());
+    Ok(())
+}
+
+pub async fn write_all<T>(
+    cipher: &mut SimpleUnidirectional,
+    stream: &mut T,
+    buffer: &mut [u8],
+) -> Result<(), io::Error>
+where
+    T: Unpin + AsyncWriteExt,
+{
     let tag = cipher.encrypt(b"vru", buffer.as_mut());
     tracing::debug!(will_write = buffer.len() + tag.len());
     stream.write_all(buffer.as_ref()).await?;

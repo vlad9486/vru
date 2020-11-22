@@ -1,14 +1,11 @@
 use std::net::SocketAddr;
-use rac::{
-    generic_array::{GenericArray, typenum},
-};
 use tokio::{net::TcpStream, sync::mpsc};
 use vru_transport::protocol::{PublicKey, SimpleCipher};
 use futures::{
     future::{FutureExt, Either},
     pin_mut, select,
 };
-use super::{terminate, utils};
+use super::{terminate, wire::Message};
 
 pub enum LocalCommand {
     Message(String),
@@ -30,8 +27,6 @@ pub async fn process<F>(
 ) where
     F: Fn(LocalEvent) + Clone + Send + 'static,
 {
-    type NetworkMessage = GenericArray<u8, typenum::U1024>;
-
     let mut trx = trx;
     let mut erx = erx;
     let _ = etx;
@@ -44,7 +39,7 @@ pub async fn process<F>(
     let _ = peer;
     loop {
         let command = erx.recv().fuse();
-        let message = utils::read_ciphered::<_, NetworkMessage>(&mut receive, &mut n_rx).fuse();
+        let message = Message::read(&mut receive, &mut n_rx).fuse();
         pin_mut!(command, message);
         let either = select! {
             command = command => Either::Left(command),
@@ -56,9 +51,13 @@ pub async fn process<F>(
         };
         match either {
             Either::Right(Ok(message)) => {
-                let length = message.as_slice().iter().position(|x| x.eq(&0)).unwrap();
-                let string = String::from_utf8(message.as_ref()[0..length].to_vec()).unwrap();
-                tracing::info!("received message: {:?}", string)
+                match message {
+                    Message::Arbitrary(bytes) => {
+                        let string = String::from_utf8(bytes).unwrap();
+                        tracing::info!("received message: {:?}", string)
+                    },
+                    _ => (),
+                }
             },
             Either::Right(Err(error)) => {
                 let _ = error;
@@ -68,11 +67,9 @@ pub async fn process<F>(
             Either::Left(Some(LocalCommand::Message(string))) => {
                 tracing::info!("will send message: {:?}", &string);
 
-                let bytes = string.as_bytes();
-                let mut message = NetworkMessage::default();
-                message.as_mut_slice()[..bytes.len()].clone_from_slice(bytes.as_ref());
+                let message = Message::Arbitrary(string.as_bytes().to_vec());
 
-                match utils::write_ciphered(&mut send, &mut n_tx, message).await {
+                match message.write(&mut send, &mut n_tx).await {
                     Ok(()) => (),
                     Err(error) => {
                         let _ = error;
