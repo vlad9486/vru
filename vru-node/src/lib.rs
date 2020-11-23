@@ -13,3 +13,6 @@ pub use self::process::{LocalCommand, LocalOutgoingEvent};
 
 mod node;
 pub use self::node::{run, Command, OutgoingEvent};
+
+#[cfg(test)]
+mod tests;

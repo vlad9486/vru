@@ -17,6 +17,7 @@ pub enum Command {
         command: process::LocalCommand,
         peer_pi: PublicIdentity,
     },
+    Terminate,
 }
 
 impl FromStr for Command {
@@ -121,41 +122,32 @@ where
     let mut trx = terminate::channel_ctrlc();
     let mut erx = erx;
     let connections = Arc::new(Mutex::new(Connections::new()));
-    while let Some(e) = trx.check(erx.next()).await.flatten() {
-        global_event(sk.clone(), pk.clone(), e, connections.clone(), &mut trx, etx.clone()).await
-    }
-}
-
-async fn global_event<F>(
-    sk: SecretKey,
-    pk: PublicKey,
-    event: IncomingEvent,
-    connections: Arc<Mutex<Connections>>,
-    trx: &mut terminate::Receiver,
-    etx: F,
-) where
-    F: Fn(OutgoingEvent) + Clone + Send + 'static,
-{
-    match event {
-        IncomingEvent::Connection((stream, remote_address)) => {
-            trx.spawn(|trx| async move {
-                incoming(sk, pk, stream, remote_address, connections, trx, etx).await
-            });
-        },
-        IncomingEvent::Command(Command::Connect {
-            remote_address,
-            peer_pi,
-        }) => {
-            trx.spawn(|trx| async move {
-                outgoing(sk, pk, remote_address, peer_pi, connections, trx, etx).await
-            });
-        },
-        IncomingEvent::Command(Command::Local { command, peer_pi }) => connections
-            .lock()
-            .await
-            .get(&peer_pi)
-            .and_then(|c| c.send(command).ok())
-            .unwrap_or_else(|| tracing::warn!("channel not found {}", peer_pi)),
+    while let Some(event) = trx.check(erx.next()).await.flatten() {
+        let connections = connections.clone();
+        let (sk, pk) = (sk.clone(), pk.clone());
+        let etx = etx.clone();
+        match event {
+            IncomingEvent::Connection((stream, remote_address)) => {
+                trx.spawn(|trx| async move {
+                    incoming(sk, pk, stream, remote_address, connections, trx, etx).await
+                });
+            },
+            IncomingEvent::Command(Command::Connect {
+                remote_address,
+                peer_pi,
+            }) => {
+                trx.spawn(|trx| async move {
+                    outgoing(sk, pk, remote_address, peer_pi, connections, trx, etx).await
+                });
+            },
+            IncomingEvent::Command(Command::Local { command, peer_pi }) => connections
+                .lock()
+                .await
+                .get(&peer_pi)
+                .and_then(|c| c.send(command).ok())
+                .unwrap_or_else(|| tracing::warn!("connection not found {}", peer_pi)),
+            IncomingEvent::Command(Command::Terminate) => break,
+        }
     }
 }
 
@@ -176,7 +168,11 @@ async fn incoming<F>(
     match handshake::incoming::<[u8; 0]>(&mut stream, &sk, &pk, &pi).await {
         Ok((peer_pk, cipher, _)) => {
             let peer_pi = PublicIdentity::new(&peer_pk);
-            etx(OutgoingEvent::connection(&peer_pk, &peer_pi, &remote_address));
+            etx(OutgoingEvent::connection(
+                &peer_pk,
+                &peer_pi,
+                &remote_address,
+            ));
             tracing::info!("post quantum secure connection established {}", &peer_pi);
             let (tx, erx) = mpsc::unbounded_channel();
             connections.lock().await.insert(peer_pi.clone(), tx);
@@ -209,7 +205,11 @@ async fn outgoing<F>(
     match handshake::outgoing(&mut stream, &sk, &pk, &peer_pi, []).await {
         Ok((peer_pk, cipher)) => {
             tracing::info!("post quantum secure connection established {}", &peer_pi);
-            etx(OutgoingEvent::connection(&peer_pk, &peer_pi, &remote_address));
+            etx(OutgoingEvent::connection(
+                &peer_pk,
+                &peer_pi,
+                &remote_address,
+            ));
             let (tx, erx) = mpsc::unbounded_channel();
             connections.lock().await.insert(peer_pi.clone(), tx);
             let etx = move |event| etx(OutgoingEvent::local(&peer_pi, event));
