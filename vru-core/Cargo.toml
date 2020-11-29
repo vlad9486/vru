@@ -1,13 +1,9 @@
 [package]
-name = "vru-node"
+name = "vru-core"
 version = "0.1.0"
 authors = ["Vladislav Melnik <vlad9486@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0"
-
-[[bin]]
-name = "vru"
-path = "src/bin/vru.rs"
 
 [dependencies]
 rac = { version = "1.3" }

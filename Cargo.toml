@@ -5,5 +5,5 @@ members = [
     "vru-sphinx",
     "vru-kyber",
     "vru-transport",
-    "vru-node",
+    "vru-core",
 ]

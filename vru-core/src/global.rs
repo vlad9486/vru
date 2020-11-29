@@ -6,7 +6,7 @@ use tokio::{
     stream::{Stream, StreamExt},
     sync::Mutex,
 };
-use super::{terminate, handshake, process, utils::TcpListenerStream};
+use super::{terminate, handshake, local, utils::TcpListenerStream};
 
 pub enum Command {
     Connect {
@@ -14,7 +14,7 @@ pub enum Command {
         peer_pi: PublicIdentity,
     },
     Local {
-        command: process::LocalCommand,
+        command: local::LocalCommand,
         peer_pi: PublicIdentity,
     },
     Terminate,
@@ -38,7 +38,7 @@ impl FromStr for Command {
                 let peer_pi = words.next().ok_or(())?.parse().map_err(|_| ())?;
                 let message = words.next().ok_or(())?.to_string();
                 Ok(Command::Local {
-                    command: process::LocalCommand::SendText(message),
+                    command: local::LocalCommand::SendText(message),
                     peer_pi: peer_pi,
                 })
             },
@@ -60,7 +60,7 @@ pub enum OutgoingEvent {
     },
     Event {
         peer_pi: PublicIdentity,
-        event: process::LocalOutgoingEvent,
+        event: local::LocalOutgoingEvent,
     },
 }
 
@@ -73,7 +73,7 @@ impl OutgoingEvent {
         }
     }
 
-    fn local(peer_pi: &PublicIdentity, event: process::LocalOutgoingEvent) -> Self {
+    fn local(peer_pi: &PublicIdentity, event: local::LocalOutgoingEvent) -> Self {
         OutgoingEvent::Event {
             peer_pi: peer_pi.clone(),
             event: event,
@@ -112,7 +112,7 @@ where
     }
 }
 
-type Connections = HashMap<PublicIdentity, mpsc::UnboundedSender<process::LocalCommand>>;
+type Connections = HashMap<PublicIdentity, mpsc::UnboundedSender<local::LocalCommand>>;
 
 async fn global_stream<S, F>(sk: SecretKey, pk: PublicKey, erx: S, etx: F)
 where
@@ -177,7 +177,7 @@ async fn incoming<F>(
             let (tx, erx) = mpsc::unbounded_channel();
             connections.lock().await.insert(peer_pi.clone(), tx);
             let etx = move |event| etx(OutgoingEvent::local(&peer_pi, event));
-            process::process(trx, erx, etx, stream, cipher, remote_address, peer_pk).await
+            local::process(trx, erx, etx, stream, cipher, remote_address, peer_pk).await
         },
         Err(error) => tracing::error!("incoming handshake failed {}", error),
     }
@@ -213,7 +213,7 @@ async fn outgoing<F>(
             let (tx, erx) = mpsc::unbounded_channel();
             connections.lock().await.insert(peer_pi.clone(), tx);
             let etx = move |event| etx(OutgoingEvent::local(&peer_pi, event));
-            process::process(trx, erx, etx, stream, cipher, remote_address, peer_pk).await
+            local::process(trx, erx, etx, stream, cipher, remote_address, peer_pk).await
         },
         Err(error) => tracing::error!("outgoing handshake failed {}", error),
     }

@@ -1,7 +1,7 @@
 use std::{env, fs, convert::TryInto};
 use rand::Rng;
 use structopt::StructOpt;
-use vru_node::{run, OutgoingEvent, LocalOutgoingEvent};
+use vru_core::{run, OutgoingEvent, LocalOutgoingEvent};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::{
     io::{self, AsyncBufReadExt},
@@ -49,7 +49,7 @@ async fn main() {
     let (control_tx, control_rx) = mpsc::channel(1);
     let path = control_path.clone();
     tokio::spawn(async move {
-        fs::remove_file(control_path)
+        fs::remove_file(path.clone())
             .or_else(|e| {
                 if let io::ErrorKind::NotFound = e.kind() {
                     Ok(())
@@ -86,4 +86,5 @@ async fn main() {
         } => tracing::info!("received {} {:?}", peer_pi, string),
     };
     run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, etx).await;
+    fs::remove_file(control_path).unwrap()
 }
