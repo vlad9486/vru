@@ -126,6 +126,9 @@ where
     type Item = Result<String, io::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.project().inner.poll_next_line(cx).map(Result::transpose)
+        self.project()
+            .inner
+            .poll_next_line(cx)
+            .map(Result::transpose)
     }
 }

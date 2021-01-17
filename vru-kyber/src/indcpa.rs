@@ -3,8 +3,7 @@ use core::{
     ops::{Mul, Add},
 };
 use rac::{
-    Line, LineValid,
-    Concat,
+    Line, LineValid, Concat,
     generic_array::{
         GenericArray, ArrayLength,
         sequence::GenericSequence,
@@ -21,7 +20,9 @@ use super::{
 
 pub type C = Concat<GenericArray<u8, typenum::U32>, GenericArray<u8, typenum::U32>>;
 
-fn gen_matrix<S, W, T>(seed: &GenericArray<u8, typenum::U32>) -> GenericArray<GenericArray<Poly<S, typenum::B0>, W>, W>
+fn gen_matrix<S, W, T>(
+    seed: &GenericArray<u8, typenum::U32>,
+) -> GenericArray<GenericArray<Poly<S, typenum::B0>, W>, W>
 where
     S: PolySize + Unsigned,
     W: ArrayLength<Poly<S, typenum::B0>> + ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,

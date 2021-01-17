@@ -1,6 +1,9 @@
 use core::marker::PhantomData;
 use pq_kem::Kem;
-use rac::{LineValid, Line, Concat, generic_array::{GenericArray, ArrayLength, typenum}};
+use rac::{
+    LineValid, Line, Concat,
+    generic_array::{GenericArray, ArrayLength, typenum},
+};
 use subtle::{ConstantTimeEq, ConditionallySelectable};
 use sha3::{
     Sha3_256, Sha3_512,
@@ -57,13 +60,18 @@ where
         public_key_hash: &GenericArray<u8, Self::PublicKeyHashLength>,
     ) -> (Self::CipherText, GenericArray<u8, Self::SharedSecretLength>) {
         let message = Sha3_256::default().chain(seed).finalize_fixed();
-        let c = Sha3_512::default().chain(&message).chain(&public_key_hash).finalize_fixed();
+        let c = Sha3_512::default()
+            .chain(&message)
+            .chain(&public_key_hash)
+            .finalize_fixed();
         let Concat(r, noise_seed) = C::clone_array(&c);
 
         let ct = encapsulate(&noise_seed, &message, public_key);
 
         let ct_hash = Sha3_256::default().chain(ct.clone_line()).finalize_fixed();
-        let ss = Sha3_256::default().chain(Concat(r, ct_hash).clone_line()).finalize_fixed();
+        let ss = Sha3_256::default()
+            .chain(Concat(r, ct_hash).clone_line())
+            .finalize_fixed();
         (ct, ss)
     }
 
@@ -77,7 +85,10 @@ where
         let pk = PublicKey::try_clone_array(&pk_bytes).unwrap();
 
         let message = decapsulate(cipher_text, sk);
-        let c = Sha3_512::default().chain(&message).chain(&public_key_hash).finalize_fixed();
+        let c = Sha3_512::default()
+            .chain(&message)
+            .chain(&public_key_hash)
+            .finalize_fixed();
         let Concat(mut r, noise_seed) = C::clone_array(&c);
 
         let ct = encapsulate(&noise_seed, &message, &pk).clone_line();
@@ -89,15 +100,26 @@ where
             r[i].conditional_assign(&reject[i], !flag);
         }
 
-        Sha3_256::default().chain(Concat(r, ct_hash).clone_line()).finalize_fixed()
+        Sha3_256::default()
+            .chain(Concat(r, ct_hash).clone_line())
+            .finalize_fixed()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{prelude::v1::Vec, marker::PhantomData};
-    use rac::{LineValid, generic_array::{GenericArray, typenum::{self, Unsigned}}};
-    use sha3::{Sha3_256, digest::{Update, FixedOutput}};
+    use rac::{
+        LineValid,
+        generic_array::{
+            GenericArray,
+            typenum::{self, Unsigned},
+        },
+    };
+    use sha3::{
+        Sha3_256,
+        digest::{Update, FixedOutput},
+    };
     use serde::Deserialize;
     use super::{Kem, Kyber};
 
@@ -120,14 +142,14 @@ mod tests {
         W: Unsigned,
         Kyber<W>: Kem,
     {
-        fn from_json() -> Self
-        {
+        fn from_json() -> Self {
             let json_text = include_str!("test_vectors.json");
             // it is a lie, `TestVector` instances has different `W` parameter
             let value = serde_json::from_str::<Vec<TestVector<W>>>(json_text).unwrap();
-            value.into_iter()
+            value
+                .into_iter()
                 .find(|t| t.width == (W::USIZE as i64))
-                .unwrap()    
+                .unwrap()
         }
 
         fn seed(&self) -> GenericArray<u8, <Kyber<W> as Kem>::PairSeedLength> {
@@ -139,19 +161,27 @@ mod tests {
             s
         }
 
-        fn secret_key_bytes(&self) -> GenericArray<u8, <<Kyber<W> as Kem>::SecretKey as LineValid>::Length> {
+        fn secret_key_bytes(
+            &self,
+        ) -> GenericArray<u8, <<Kyber<W> as Kem>::SecretKey as LineValid>::Length> {
             GenericArray::from_slice(hex::decode(self.secret_key).unwrap().as_ref()).clone()
         }
 
-        fn public_key_bytes(&self) -> GenericArray<u8, <<Kyber<W> as Kem>::PublicKey as LineValid>::Length> {
+        fn public_key_bytes(
+            &self,
+        ) -> GenericArray<u8, <<Kyber<W> as Kem>::PublicKey as LineValid>::Length> {
             GenericArray::from_slice(hex::decode(self.public_key).unwrap().as_ref()).clone()
         }
 
-        fn encapsulation_seed(&self) -> GenericArray<u8, <Kyber<W> as Kem>::EncapsulationSeedLength> {
+        fn encapsulation_seed(
+            &self,
+        ) -> GenericArray<u8, <Kyber<W> as Kem>::EncapsulationSeedLength> {
             GenericArray::from_slice(hex::decode(self.encapsulation_seed).unwrap().as_ref()).clone()
         }
 
-        fn cipher_text_bytes(&self) -> GenericArray<u8, <<Kyber<W> as Kem>::CipherText as LineValid>::Length> {
+        fn cipher_text_bytes(
+            &self,
+        ) -> GenericArray<u8, <<Kyber<W> as Kem>::CipherText as LineValid>::Length> {
             GenericArray::from_slice(hex::decode(self.cipher_text).unwrap().as_ref()).clone()
         }
 

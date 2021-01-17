@@ -67,8 +67,7 @@ async fn main() {
             };
 
             let lines = LinesStream::new(io::BufReader::new(stream).lines());
-            let mut control = lines
-                .filter_map(|line| line.ok()?.parse().ok());
+            let mut control = lines.filter_map(|line| line.ok()?.parse().ok());
             while let Some(c) = control.next().await {
                 let _ = control_tx.send(c);
             }
