@@ -74,13 +74,10 @@ impl Line for PublicKeyCompressed {
     }
 }
 
-fn compress<R>(pk: &PublicKey, rng: &mut R) -> PublicKeyCompressed
-where
-    R: rand::Rng,
-{
+fn compress(pk: &PublicKey) -> PublicKeyCompressed {
     PublicKeyCompressed {
         elliptic: Curve::compress(&pk.elliptic),
-        lattice: pk.lattice.compress(rng),
+        lattice: pk.lattice.compress(),
     }
 }
 
@@ -240,7 +237,7 @@ impl State {
         match self {
             State { symmetric_state } => {
                 let (e_sk, e_pk) = PublicKey::key_pair(rng);
-                let e_pk_c = compress(&e_pk, rng);
+                let e_pk_c = compress(&e_pk);
                 let peer_s_pk_elliptic: EdwardsPoint = Curve::decompress(&peer_s_pi.elliptic)?;
                 let mut tag = GenericArray::default();
 
@@ -279,7 +276,7 @@ impl State {
                 let peer_e_pq = peer_e_pk.lattice.encapsulate(rng);
 
                 let (e_sk, e_pk) = PublicKey::key_pair(rng);
-                let e_pk_c = compress(&e_pk, rng);
+                let e_pk_c = compress(&e_pk);
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&peer_e_pk_c.elliptic)
@@ -326,7 +323,7 @@ impl StateEphemeral {
             } => {
                 let peer_e_pk = decompress(&peer_e_pk_c);
                 let e_ss = PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &e_ct);
-                let mut encrypted_s_pk = Encrypted::new(compress(&s_pk, rng));
+                let mut encrypted_s_pk = Encrypted::new(compress(&s_pk));
                 let peer_e_pq = peer_e_pk.lattice.encapsulate(rng);
                 let mut encrypted_peer_e_ct = Encrypted::new(peer_e_pq.ct);
 

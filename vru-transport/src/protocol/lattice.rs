@@ -62,11 +62,7 @@ pub struct Encapsulated {
 }
 
 impl PkLattice {
-    pub fn compress<R>(&self, rng: &mut R) -> PkLatticeCompressed
-    where
-        R: rand::Rng,
-    {
-        let _ = rng;
+    pub fn compress(&self) -> PkLatticeCompressed {
         self.0 .0.clone()
     }
 
