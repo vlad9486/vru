@@ -27,7 +27,7 @@ features = ["curve25519-dalek"]
 version = "1.6"
 
 [dev-dependencies.rand]
-version = "0.7"
+version = "0.8"
 
 [dev-dependencies.curve25519-dalek]
 version = "3.0"

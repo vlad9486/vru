@@ -3,9 +3,9 @@ use vru_transport::protocol::{SecretKey, PublicKey, PublicIdentity};
 use tokio::{
     sync::mpsc,
     net::{TcpListener, TcpStream, ToSocketAddrs},
-    stream::{Stream, StreamExt},
     sync::Mutex,
 };
+use tokio_stream::{Stream, StreamExt};
 use super::{terminate, handshake, local, utils::TcpListenerStream};
 
 pub enum Command {

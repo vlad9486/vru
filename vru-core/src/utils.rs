@@ -6,10 +6,12 @@ use std::{
 };
 use rac::{Line, generic_array::GenericArray};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncReadExt, AsyncWriteExt, AsyncBufRead},
     net::{TcpListener, TcpStream},
-    stream::Stream,
+    sync::mpsc::UnboundedReceiver,
+    io::Lines,
 };
+use tokio_stream::Stream;
 use vru_transport::protocol::SimpleUnidirectional;
 
 pub async fn read<T, L>(stream: &mut T) -> Result<L, io::Error>
@@ -78,5 +80,52 @@ impl Stream for TcpListenerStream {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.project().inner.poll_accept(cx).map(Some)
+    }
+}
+
+pin_project_lite::pin_project! {
+    #[must_use = "streams do nothing unless polled"]
+    pub struct UnboundedReceiverStream<T> {
+        #[pin]
+        inner: UnboundedReceiver<T>,
+    }
+}
+
+impl<T> UnboundedReceiverStream<T> {
+    pub fn new(inner: UnboundedReceiver<T>) -> Self {
+        UnboundedReceiverStream { inner: inner }
+    }
+}
+
+impl<T> Stream for UnboundedReceiverStream<T> {
+    type Item = T;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.project().inner.poll_recv(cx)
+    }
+}
+
+pin_project_lite::pin_project! {
+    #[must_use = "streams do nothing unless polled"]
+    pub struct LinesStream<R> {
+        #[pin]
+        inner: Lines<R>,
+    }
+}
+
+impl<R> LinesStream<R> {
+    pub fn new(inner: Lines<R>) -> Self {
+        LinesStream { inner: inner }
+    }
+}
+
+impl<R> Stream for LinesStream<R>
+where
+    R: AsyncBufRead,
+{
+    type Item = Result<String, io::Error>;
+
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.project().inner.poll_next_line(cx).map(Result::transpose)
     }
 }

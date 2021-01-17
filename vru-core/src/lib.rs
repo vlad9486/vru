@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod utils;
+pub use self::utils::{UnboundedReceiverStream, LinesStream};
 
 mod wire;
 

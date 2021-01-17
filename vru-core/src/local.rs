@@ -1,10 +1,12 @@
 use std::net::SocketAddr;
-use tokio::{net::TcpStream, sync::mpsc, stream::StreamExt};
+use tokio::{net::TcpStream, sync::mpsc};
+use tokio_stream::StreamExt;
 use tokio_util::codec::FramedRead;
 use vru_transport::protocol::{PublicKey, SimpleCipher};
 use super::{
     terminate,
     wire::{Message, MessageDecoder, DecoderError},
+    utils::UnboundedReceiverStream,
 };
 
 pub enum LocalCommand {
@@ -40,7 +42,7 @@ pub async fn process<F>(
     let (nrx, mut ntx) = stream.split();
     let SimpleCipher { mut send, receive } = cipher;
 
-    let erx = erx.map(LocalIncomingEvent::Command);
+    let erx = UnboundedReceiverStream::new(erx).map(LocalIncomingEvent::Command);
     let nrx = FramedRead::new(nrx, MessageDecoder::new(receive));
     let mut erx = erx.merge(nrx.map(LocalIncomingEvent::Message));
 

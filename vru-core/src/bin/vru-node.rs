@@ -1,16 +1,16 @@
 use std::{env, fs, convert::TryInto};
 use rand::Rng;
 use structopt::StructOpt;
-use vru_core::{run, OutgoingEvent, LocalOutgoingEvent};
+use vru_core::{run, OutgoingEvent, LocalOutgoingEvent, LinesStream, UnboundedReceiverStream};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::{
     io::{self, AsyncBufReadExt},
     sync::mpsc,
     net::UnixListener,
-    stream::StreamExt,
     select,
     signal::ctrl_c,
 };
+use tokio_stream::StreamExt;
 
 #[derive(StructOpt)]
 struct Opts {
@@ -46,7 +46,8 @@ async fn main() {
 
     let control_path = format!("{}/.vru/{}.sock", env::var("HOME").unwrap(), opts.name);
 
-    let (control_tx, control_rx) = mpsc::channel(1);
+    let (control_tx, control_rx) = mpsc::unbounded_channel();
+    let control_rx = UnboundedReceiverStream::new(control_rx);
     let path = control_path.clone();
     tokio::spawn(async move {
         fs::remove_file(path.clone())
@@ -65,11 +66,11 @@ async fn main() {
                 _ = ctrl_c() => break,
             };
 
-            let mut control = io::BufReader::new(stream)
-                .lines()
+            let lines = LinesStream::new(io::BufReader::new(stream).lines());
+            let mut control = lines
                 .filter_map(|line| line.ok()?.parse().ok());
             while let Some(c) = control.next().await {
-                let _ = control_tx.send(c).await;
+                let _ = control_tx.send(c);
             }
         }
     });

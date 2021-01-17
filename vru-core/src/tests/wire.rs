@@ -6,9 +6,10 @@ use std::{
     },
 };
 use rand::Rng;
-use tokio::{stream::StreamExt, sync::mpsc};
+use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 use vru_transport::protocol::{PublicKey, SecretKey, PublicIdentity};
-use crate::{run, Command, LocalCommand, OutgoingEvent, LocalOutgoingEvent};
+use crate::{run, Command, LocalCommand, OutgoingEvent, LocalOutgoingEvent, utils};
 
 fn key() -> (PublicKey, SecretKey, PublicIdentity) {
     let mut seed = [0; 96];
@@ -32,6 +33,7 @@ async fn b() {
     let sizes_b_to_a = [0, 640, 1259, 1260, 1261, 1400, 1259 + 1264, 1260 + 1264];
 
     let (tx, rx) = mpsc::unbounded_channel();
+    let rx = utils::UnboundedReceiverStream::new(rx);
 
     let mut commands = sizes_b_to_a
         .iter()
@@ -51,9 +53,10 @@ async fn b() {
     };
 
     let (tx_when_terminate, rx_b) = mpsc::unbounded_channel();
+    let rx_b = utils::UnboundedReceiverStream::new(rx_b);
     tx_when_terminate
         .send(Command::Connect {
-            remote_address: "192.168.0.103:8224".parse().unwrap(),
+            remote_address: "0.0.0.0:8224".parse().unwrap(),
             peer_pi: pi_a,
         })
         .ok()
