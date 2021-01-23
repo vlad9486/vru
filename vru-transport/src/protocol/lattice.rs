@@ -1,4 +1,4 @@
-use std::{ops::Add, fmt};
+use std::{ops::{Add, Mul}, fmt};
 use rac::{
     LineValid, Line, Concat,
     generic_array::{GenericArray, sequence::GenericSequence, typenum},
@@ -9,52 +9,40 @@ use sha3::{
 };
 use vru_kyber::{Kyber, Kem};
 
-type PkLatticeL = <typenum::U1024 as Add<typenum::U64>>::Output;
+type Array<N> = GenericArray<u8, N>;
 
-pub struct PkLattice(Concat<GenericArray<u8, PkLatticeL>, GenericArray<u8, typenum::U32>>);
+// 32 * 11 * 3 + 32 = 32 * 34
+type PkLatticeL = <typenum::U32 as Mul<typenum::U34>>::Output;
+
+pub struct PkLattice(Concat<Array<PkLatticeL>, Array<typenum::U32>>);
 
 impl fmt::Debug for PkLattice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("PublicKey")
-            .field(&hex::encode(self.clone_line()))
+            .field(&hex::encode(self.0 .0))
             .finish()
-    }
-}
-
-impl LineValid for PkLattice {
-    type Length = <typenum::U1024 as Add<typenum::U96>>::Output;
-
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
-        Concat::try_clone_array(a).map(PkLattice)
-    }
-
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
-        self.0.clone_line()
-    }
-}
-
-impl Line for PkLattice {
-    fn clone_array(a: &GenericArray<u8, Self::Length>) -> Self {
-        Self::try_clone_array(a).unwrap()
     }
 }
 
 impl Clone for PkLattice {
     fn clone(&self) -> Self {
-        Self::clone_array(&self.clone_line())
+        match self {
+            &PkLattice(Concat(ref l, ref h)) => PkLattice(Concat(l.clone(), h.clone()))
+        }
     }
 }
 
 #[derive(Clone)]
-pub struct SkLattice(GenericArray<u8, <typenum::U1024 as Add<typenum::U256>>::Output>);
+pub struct SkLattice(Array<<typenum::U1024 as Add<typenum::U256>>::Output>);
 
-pub type PkLatticeCl = <typenum::U1024 as Add<typenum::U64>>::Output;
+pub type PkLatticeCl = PkLatticeL;
 
-pub type PkLatticeCompressed = GenericArray<u8, PkLatticeCl>;
+pub type PkLatticeCompressed = Array<PkLatticeCl>;
 
-pub type CipherText = GenericArray<u8, <typenum::U1024 as Add<typenum::U128>>::Output>;
+// 32 * 11 * 3 + 32 * 3 = 32 * 36
+pub type CipherText = Array<<typenum::U32 as Mul<typenum::U36>>::Output>;
 
-pub type SharedSecret = GenericArray<u8, typenum::U32>;
+pub type SharedSecret = Array<typenum::U32>;
 
 pub struct Encapsulated {
     pub ss: SharedSecret,

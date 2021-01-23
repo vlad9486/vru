@@ -106,8 +106,8 @@ impl PublicIdentity {
 impl fmt::Display for PublicIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut bytes = [0b10111110; 66];
-        bytes[2..34].clone_from_slice(self.elliptic.clone_line().as_ref());
-        bytes[34..].clone_from_slice(self.lattice.as_ref());
+        bytes[2..34].clone_from_slice(&self.elliptic);
+        bytes[34..].clone_from_slice(&self.lattice);
         write!(f, "{}", base64::encode(bytes))
     }
 }
@@ -204,15 +204,20 @@ pub struct StateFinal {
 }
 
 // generate: State -> StateI, Message0
+// 1136 = 1120 + 16
 pub type Message0 = Concat<PublicKeyCompressed, Tag<Noise>>;
 // consume: State, Message0 -> StateI, Message1
+// 2288 = 1120 + 1152 + 16
 pub type Message1 = Concat<Concat<PublicKeyCompressed, CipherText>, Tag<Noise>>;
 // generate: StateI, Message1 -> StateF, Message2
+// 2320 = 1120 + 16 + 1152 + 16 + 16
 pub type Message2 =
     Concat<Concat<Encrypted<PublicKeyCompressed>, Encrypted<CipherText>>, Tag<Noise>>;
 // consume: StateI, Message2 -> StateF, Message3, PublicKey
-pub type Message3 = Concat<Concat<Encrypted<PkLattice>, Encrypted<CipherText>>, Tag<Noise>>;
+// 2288 = 1088 + 16 + 1152 + 16 + 16
+pub type Message3 = Concat<Concat<Encrypted<PkLatticeCompressed>, Encrypted<CipherText>>, Tag<Noise>>;
 // generate: StateF, Message3 -> Cipher, Message4
+// 1184 = 1152 + 16 + 16
 pub type Message4<P> = Concat<Encrypted<CipherText>, Encrypted<P>>;
 // consume: StateF, Message2 -> Cipher
 
@@ -222,7 +227,7 @@ impl State {
             symmetric_state: SymmetricState::new("Noise_XK_25519+Kyber_ChaChaPoly_SHA256")
                 .mix_hash(b"vru")
                 .mix_hash(&s_pi.elliptic)
-                .mix_hash(s_pi.lattice.as_ref()),
+                .mix_hash(&s_pi.lattice),
         }
     }
 
@@ -243,7 +248,7 @@ impl State {
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&e_pk_c.elliptic)
-                    .mix_hash(&e_pk.lattice.clone_line())
+                    .mix_hash(&e_pk_c.lattice)
                     .mix_shared_secret(&Curve::compress(&peer_s_pk_elliptic.exp_ec(&e_sk.elliptic)))
                     .encrypt(&mut [])
                     .destruct(|t| tag = t);
@@ -280,11 +285,11 @@ impl State {
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&peer_e_pk_c.elliptic)
-                    .mix_hash(&peer_e_pk.lattice.clone_line())
+                    .mix_hash(&peer_e_pk_c.lattice)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&s_sk.elliptic)))
                     .decrypt(&mut [], tag)?
                     .mix_hash(&e_pk_c.elliptic)
-                    .mix_hash(&e_pk.lattice.clone_line())
+                    .mix_hash(&e_pk_c.lattice)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&peer_e_pq.ss)
                     .encrypt(&mut [])
@@ -329,7 +334,7 @@ impl StateEphemeral {
 
                 let symmetric_state = symmetric_state
                     .mix_hash(&peer_e_pk_c.elliptic)
-                    .mix_hash(&peer_e_pk.lattice.clone_line())
+                    .mix_hash(&peer_e_pk_c.lattice)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&e_ss)
                     .decrypt(&mut [], tag)?
@@ -372,13 +377,10 @@ impl StateEphemeral {
                 let peer_s_pk;
                 let mut encrypted_peer_s_ct;
                 let peer_s_ss;
-                let mut encrypted_s_pk_lattice = Encrypted::new(s_pk.lattice.clone());
+                let mut encrypted_s_pk_lattice = Encrypted::new(s_pk.lattice.compress());
 
                 let symmetric_state = symmetric_state
-                    .decrypt(
-                        encrypted_peer_s_pk.data.as_mut_slice(),
-                        encrypted_peer_s_pk.tag,
-                    )?
+                    .decrypt(encrypted_peer_s_pk.data.as_mut_slice(), encrypted_peer_s_pk.tag)?
                     .decrypt(encrypted_e_ct.data.as_mut_slice(), encrypted_e_ct.tag)?
                     .mix_shared_secret({
                         peer_s_pk_c = encrypted_peer_s_pk.extract();
@@ -389,8 +391,7 @@ impl StateEphemeral {
                         &Curve::compress(&peer_s_pk.elliptic.exp_ec(&e_sk.elliptic))
                     })
                     .mix_shared_secret({
-                        PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &encrypted_e_ct.data)
-                            .as_ref()
+                        &PkLattice::decapsulate(&e_pk.lattice, &e_sk.lattice, &encrypted_e_ct.data)
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt(encrypted_peer_s_ct.data.as_mut())
@@ -443,22 +444,22 @@ impl StateFinal {
                         encrypted_peer_s_pk_lattice.tag,
                     )?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(
+                        &PkLattice::decapsulate(
                             &s_pk.lattice,
                             &s_sk.lattice,
                             &encrypted_s_ct.extract(),
                         )
-                        .as_ref()
                     })
                     .decrypt(&mut [], tag)?
                     .encrypt({
-                        peer_s_pk_lattice = encrypted_peer_s_pk_lattice.extract();
+                        let temp = encrypted_peer_s_pk_lattice.extract();
+                        peer_s_pk_lattice = PkLattice::decompress(&temp);
                         peer_s_pq = peer_s_pk_lattice.encapsulate(rng);
                         encrypted_peer_s_ct = Encrypted::new(peer_s_pq.ct);
                         encrypted_peer_s_ct.data.as_mut()
                     })
                     .destruct(|t| encrypted_peer_s_ct.tag = t)
-                    .mix_shared_secret(peer_s_pq.ss.as_ref())
+                    .mix_shared_secret(&peer_s_pq.ss)
                     .encrypt(payload.data.as_mut())
                     .destruct(|t| payload.tag = t)
                     .finish();
@@ -492,12 +493,11 @@ impl StateFinal {
                 let cipher = symmetric_state
                     .decrypt(encrypted_s_ct.data.as_mut(), encrypted_s_ct.tag)?
                     .mix_shared_secret({
-                        PkLattice::decapsulate(
+                        &PkLattice::decapsulate(
                             &s_pk.lattice,
                             &s_sk.lattice,
                             &encrypted_s_ct.extract(),
                         )
-                        .as_ref()
                     })
                     .decrypt(payload.data.as_mut(), payload.tag)?
                     .finish()
