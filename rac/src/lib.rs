@@ -5,7 +5,7 @@
 pub extern crate generic_array;
 
 mod line;
-pub use self::line::{LineValid, Line};
+pub use self::line::{Array, LineValid, Line};
 
 mod concat;
 pub use self::concat::Concat;

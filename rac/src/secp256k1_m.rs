@@ -1,19 +1,18 @@
-use crate::{LineValid, Scalar, Curve};
-
 use generic_array::{
     GenericArray,
     typenum::{U32, U33, U64},
 };
 use secp256k1::{SecretKey, PublicKey, Signature as Secp256k1Signature};
+use crate::{Array, LineValid, Scalar, Curve};
 
 impl LineValid for SecretKey {
     type Length = U32;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         SecretKey::from_slice(a.as_slice()).map_err(|_| ())
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         GenericArray::from_slice(&self[..]).clone()
     }
 }
@@ -44,14 +43,14 @@ impl Scalar for SecretKey {
 impl LineValid for PublicKey {
     type Length = U64;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         let mut buffer = [0; 65];
         buffer[0] = 4;
         buffer[1..].clone_from_slice(a.as_slice());
         PublicKey::from_slice(buffer.as_ref()).map_err(|_| ())
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         let mut a = GenericArray::default();
         a.clone_from_slice(&self.serialize_uncompressed()[1..]);
         a
@@ -97,18 +96,18 @@ impl Curve for PublicKey {
         c
     }
 
-    fn decompress(packed: &GenericArray<u8, Self::CompressedLength>) -> Result<Self, ()> {
+    fn decompress(packed: &Array<Self::CompressedLength>) -> Result<Self, ()> {
         PublicKey::from_slice(packed.as_slice()).map_err(|_| ())
     }
 
-    fn compress(&self) -> GenericArray<u8, Self::CompressedLength> {
+    fn compress(&self) -> Array<Self::CompressedLength> {
         let buffer = self.serialize();
         let mut a = GenericArray::default();
         a.clone_from_slice(buffer.as_ref());
         a
     }
 
-    fn x_coordinate(&self) -> GenericArray<u8, Self::CoordinateLength> {
+    fn x_coordinate(&self) -> Array<Self::CoordinateLength> {
         let buffer = self.serialize();
         let mut a = GenericArray::default();
         a.clone_from_slice(&buffer[1..]);
@@ -119,11 +118,11 @@ impl Curve for PublicKey {
 impl LineValid for Secp256k1Signature {
     type Length = U64;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         Secp256k1Signature::from_compact(a.as_slice()).map_err(|_| ())
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         let mut a = GenericArray::default();
         a.clone_from_slice(self.serialize_compact().as_ref());
         a

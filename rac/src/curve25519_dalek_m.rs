@@ -1,5 +1,3 @@
-use crate::{LineValid, Scalar, Curve};
-
 use generic_array::{GenericArray, typenum};
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_TABLE,
@@ -7,11 +5,12 @@ use curve25519_dalek::{
     montgomery::MontgomeryPoint,
     scalar::Scalar as C25519Scalar,
 };
+use crate::{Array, LineValid, Scalar, Curve};
 
 impl LineValid for C25519Scalar {
     type Length = typenum::U32;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         let mut buffer = [0; 32];
         buffer.clone_from_slice(a.as_slice());
         buffer[0] &= 248;
@@ -21,7 +20,7 @@ impl LineValid for C25519Scalar {
         Ok(C25519Scalar::from_bits(buffer))
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         GenericArray::from_slice(self.as_bytes()).clone()
     }
 }
@@ -47,13 +46,13 @@ impl Scalar for C25519Scalar {
 impl LineValid for MontgomeryPoint {
     type Length = typenum::U32;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         let mut buffer = [0; 32];
         buffer.clone_from_slice(a.as_slice());
         Ok(MontgomeryPoint(buffer))
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         GenericArray::from_slice(self.as_bytes()).clone()
     }
 }
@@ -78,15 +77,15 @@ impl Curve for MontgomeryPoint {
         self * rhs
     }
 
-    fn decompress(packed: &GenericArray<u8, Self::CompressedLength>) -> Result<Self, ()> {
+    fn decompress(packed: &Array<Self::CompressedLength>) -> Result<Self, ()> {
         Self::try_clone_array(packed)
     }
 
-    fn compress(&self) -> GenericArray<u8, Self::CompressedLength> {
+    fn compress(&self) -> Array<Self::CompressedLength> {
         self.clone_line()
     }
 
-    fn x_coordinate(&self) -> GenericArray<u8, Self::CoordinateLength> {
+    fn x_coordinate(&self) -> Array<Self::CoordinateLength> {
         unimplemented!()
     }
 }
@@ -94,13 +93,13 @@ impl Curve for MontgomeryPoint {
 impl LineValid for EdwardsPoint {
     type Length = typenum::U32;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         CompressedEdwardsY::from_slice(a.as_slice())
             .decompress()
             .ok_or(())
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         GenericArray::from_slice(self.compress().as_bytes().as_ref()).clone()
     }
 }
@@ -124,15 +123,15 @@ impl Curve for EdwardsPoint {
         self * rhs
     }
 
-    fn decompress(packed: &GenericArray<u8, Self::CompressedLength>) -> Result<Self, ()> {
+    fn decompress(packed: &Array<Self::CompressedLength>) -> Result<Self, ()> {
         Self::try_clone_array(packed)
     }
 
-    fn compress(&self) -> GenericArray<u8, Self::CompressedLength> {
+    fn compress(&self) -> Array<Self::CompressedLength> {
         self.compress().as_bytes().clone().into()
     }
 
-    fn x_coordinate(&self) -> GenericArray<u8, Self::CoordinateLength> {
+    fn x_coordinate(&self) -> Array<Self::CoordinateLength> {
         let mut buffer = self.compress().as_bytes().clone();
         buffer[0x1f] &= 0x7f;
         buffer.into()

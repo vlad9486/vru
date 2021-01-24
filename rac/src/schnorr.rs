@@ -1,12 +1,11 @@
-use crate::{
-    line::LineValid,
-    concat::Concat,
-    elliptic::{Scalar, Curve},
-};
-
 use generic_array::GenericArray;
 use digest::{FixedOutput, Update};
 use core::marker::PhantomData;
+use crate::{
+    line::{Array, LineValid},
+    concat::Concat,
+    elliptic::{Scalar, Curve},
+};
 
 pub trait Signature
 where
@@ -30,9 +29,9 @@ pub struct Schnorr<C, D>
 where
     C: Curve,
     D: Default + Update + FixedOutput<OutputSize = <C::Scalar as LineValid>::Length>,
-    Concat<GenericArray<u8, C::CoordinateLength>, C::Scalar>: LineValid,
+    Concat<Array<C::CoordinateLength>, C::Scalar>: LineValid,
 {
-    r: GenericArray<u8, C::CoordinateLength>,
+    r: Array<C::CoordinateLength>,
     s: C::Scalar,
     phantom_data: PhantomData<D>,
 }
@@ -41,11 +40,11 @@ impl<C, D> LineValid for Schnorr<C, D>
 where
     C: Curve,
     D: Default + Update + FixedOutput<OutputSize = <C::Scalar as LineValid>::Length>,
-    Concat<GenericArray<u8, C::CoordinateLength>, C::Scalar>: LineValid,
+    Concat<Array<C::CoordinateLength>, C::Scalar>: LineValid,
 {
-    type Length = <Concat<GenericArray<u8, C::CoordinateLength>, C::Scalar> as LineValid>::Length;
+    type Length = <Concat<Array<C::CoordinateLength>, C::Scalar> as LineValid>::Length;
 
-    fn try_clone_array(a: &GenericArray<u8, Self::Length>) -> Result<Self, ()> {
+    fn try_clone_array(a: &Array<Self::Length>) -> Result<Self, ()> {
         Concat::try_clone_array(a).map(|Concat(r, s)| Schnorr {
             r: r,
             s: s,
@@ -53,7 +52,7 @@ where
         })
     }
 
-    fn clone_line(&self) -> GenericArray<u8, Self::Length> {
+    fn clone_line(&self) -> Array<Self::Length> {
         use generic_array::typenum::Unsigned;
 
         let mut x = GenericArray::default();
@@ -68,7 +67,7 @@ impl<C, D> Signature for Schnorr<C, D>
 where
     C: Curve,
     D: Default + Update + FixedOutput<OutputSize = <C::Scalar as LineValid>::Length>,
-    Concat<GenericArray<u8, C::CoordinateLength>, C::Scalar>: LineValid,
+    Concat<Array<C::CoordinateLength>, C::Scalar>: LineValid,
 {
     type Scalar = C::Scalar;
     type Curve = C;

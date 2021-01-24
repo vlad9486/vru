@@ -1,6 +1,5 @@
-use crate::line::LineValid;
-
-use generic_array::{GenericArray, ArrayLength};
+use generic_array::ArrayLength;
+use crate::line::{Array, LineValid};
 
 pub trait Scalar
 where
@@ -25,7 +24,7 @@ where
     fn base() -> Self;
     fn mul_ec(&self, rhs: &Self) -> Self;
     fn exp_ec(&self, rhs: &Self::Scalar) -> Self;
-    fn decompress(packed: &GenericArray<u8, Self::CompressedLength>) -> Result<Self, ()>;
-    fn compress(&self) -> GenericArray<u8, Self::CompressedLength>;
-    fn x_coordinate(&self) -> GenericArray<u8, Self::CoordinateLength>;
+    fn decompress(packed: &Array<Self::CompressedLength>) -> Result<Self, ()>;
+    fn compress(&self) -> Array<Self::CompressedLength>;
+    fn x_coordinate(&self) -> Array<Self::CoordinateLength>;
 }
