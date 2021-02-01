@@ -11,7 +11,7 @@ use rac::generic_array::{GenericArray, ArrayLength, typenum};
 use bytes::{BytesMut, Buf};
 use tokio::io::AsyncWriteExt;
 use tokio_util::codec::Decoder;
-use vru_transport::protocol::SimpleUnidirectional as Cipher;
+use vru_transport::protocol::TrivialUnidirectional as Cipher;
 use super::utils;
 
 type Packet = GenericArray<u8, <typenum::U1024 as Add<typenum::U240>>::Output>;

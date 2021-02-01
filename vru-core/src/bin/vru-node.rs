@@ -1,6 +1,7 @@
-use std::{env, fs, convert::TryInto};
+use std::{env, fs};
 use rand::Rng;
 use structopt::StructOpt;
+use rac::Array;
 use vru_core::{run, OutgoingEvent, LocalOutgoingEvent, LinesStream, UnboundedReceiverStream};
 use vru_transport::protocol::{PublicKey, PublicIdentity};
 use tokio::{
@@ -33,14 +34,16 @@ async fn main() {
     let db = sled::open(db_path).unwrap();
 
     let seed = if let Some(kp) = db.get(b"key_seed").unwrap() {
-        kp.as_ref().try_into().unwrap()
+        let mut s = Array::default();
+        s.clone_from_slice(kp.as_ref());
+        s
     } else {
-        let mut s = [0; 96];
+        let mut s = Array::default();
         rand::thread_rng().fill(s.as_mut());
         db.insert(b"key_seed", s.as_ref()).unwrap();
         s
     };
-    let (sk, pk) = PublicKey::key_pair_fixed(seed);
+    let (sk, pk) = PublicKey::key_pair_seed(&seed);
     let pi = PublicIdentity::new(&pk);
     tracing::info!("identity: {}", pi);
 

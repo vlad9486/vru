@@ -1,8 +1,9 @@
 use std::io;
-use rac::Line;
+use rac::{Array, Line, Concat};
 use vru_transport::protocol::{
-    SecretKey, PublicKey, PublicIdentity, State, SimpleRotor, SimpleCipher, Encrypted, Message4,
+    SecretKey, PublicKey, PublicIdentity, TrivialCipher, Encrypted, Noise, xk,
 };
+use rand::Rng;
 use tokio::net::TcpStream;
 use super::utils;
 
@@ -12,25 +13,31 @@ pub async fn outgoing<L>(
     pk: &PublicKey,
     peer_pi: &PublicIdentity,
     payload: L,
-) -> Result<(PublicKey, SimpleCipher), io::Error>
+) -> Result<(PublicKey, TrivialCipher), io::Error>
 where
     L: Line,
-    Encrypted<L>: Line,
-    Message4<L>: Line,
+    Encrypted<Noise, L>: Line,
+    xk::Message4<L>: Line,
 {
-    let state = State::new(&peer_pi);
+    let mut seed96 = Array::default();
+    let mut seed32 = Array::default();
+
+    let state = xk::State::new(&peer_pi);
+    rand::thread_rng().fill(seed96.as_mut());
     let (state, message) = state
-        .generate(&mut rand::thread_rng(), &peer_pi)
+        .generate(&seed96, &peer_pi)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
+    rand::thread_rng().fill::<[u8]>(seed32.as_mut());
     let (state, message) = state
-        .generate(message, &mut rand::thread_rng(), sk, pk)
+        .generate(message, &seed32, sk, pk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
-    let (cipher, peer_pk, message) = state
-        .generate::<_, L, SimpleRotor>(message, &mut rand::thread_rng(), payload, pk, sk, peer_pi)
+    rand::thread_rng().fill::<[u8]>(seed32.as_mut());
+    let (cipher, _, peer_pk, message) = state
+        .generate::<L, _>(message, &seed32, payload, pk, sk, peer_pi)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
 
@@ -42,26 +49,32 @@ pub async fn incoming<L>(
     sk: &SecretKey,
     pk: &PublicKey,
     pi: &PublicIdentity,
-) -> Result<(PublicKey, SimpleCipher, L), io::Error>
+) -> Result<(PublicKey, TrivialCipher, L), io::Error>
 where
     L: Line,
-    Encrypted<L>: Line,
-    Message4<L>: Line,
+    Encrypted<Noise, L>: Line,
+    xk::Message4<L>: Line,
 {
-    let state = State::new(&pi);
+    let mut seed96 = Array::default();
+    let mut seed32 = Array::default();
+
+    let state = xk::State::new(&pi);
     let message = utils::read(stream).await?;
+    rand::thread_rng().fill(seed96.as_mut());
+    rand::thread_rng().fill::<[u8]>(seed32.as_mut());
     let (state, message) = state
-        .consume(message, &mut rand::thread_rng(), &sk)
+        .consume(message, &Concat(seed96, seed32), &sk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
+    rand::thread_rng().fill::<[u8]>(seed32.as_mut());
     let (state, peer_pk, message) = state
-        .consume(message, &mut rand::thread_rng(), &pk)
+        .consume(message, &seed32, &pk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
     utils::write(stream, message).await?;
     let message = utils::read(stream).await?;
-    let (cipher, payload) = state
-        .consume::<SimpleRotor, L>(message, pk, &sk)
+    let (cipher, _, payload) = state
+        .consume::<_, L>(message, pk, &sk)
         .map_err(|()| io::Error::new(io::ErrorKind::Other, "Handshake error"))?;
 
     Ok((peer_pk, cipher, payload))

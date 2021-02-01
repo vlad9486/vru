@@ -170,13 +170,13 @@ where
         }
     }
 
-    pub fn finish<R>(self) -> Cipher<C, R>
+    pub fn finish<R>(self) -> (Cipher<C, R>, GenericArray<u8, <C::MixHash as MixHash>::L>)
     where
         R: Rotor<C>,
     {
         let c = self.key.into();
         let (_0, _1) = C::HkdfSplit::split_final(c.as_ref(), &[]);
-        Cipher::new(c, _0, _1)
+        (Cipher::new(c, _0, _1), self.hash)
     }
 }
 

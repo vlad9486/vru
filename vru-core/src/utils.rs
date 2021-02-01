@@ -12,7 +12,7 @@ use tokio::{
     io::Lines,
 };
 use tokio_stream::Stream;
-use vru_transport::protocol::SimpleUnidirectional;
+use vru_transport::protocol::TrivialUnidirectional as Cipher;
 
 pub async fn read<T, L>(stream: &mut T) -> Result<L, io::Error>
 where
@@ -36,7 +36,7 @@ where
 }
 
 pub async fn write_ciphered<T, L>(
-    cipher: &mut SimpleUnidirectional,
+    cipher: &mut Cipher,
     stream: &mut T,
     line: L,
 ) -> Result<(), io::Error>
@@ -48,7 +48,7 @@ where
 }
 
 pub async fn write_all<T>(
-    cipher: &mut SimpleUnidirectional,
+    cipher: &mut Cipher,
     stream: &mut T,
     buffer: &mut [u8],
 ) -> Result<(), io::Error>

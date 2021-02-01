@@ -8,14 +8,15 @@ use std::{
 use rand::Rng;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
+use rac::Array;
 use vru_transport::protocol::{PublicKey, SecretKey, PublicIdentity};
 use crate::{run, Command, LocalCommand, OutgoingEvent, LocalOutgoingEvent, utils};
 
 fn key() -> (PublicKey, SecretKey, PublicIdentity) {
-    let mut seed = [0; 96];
+    let mut seed = Array::default();
     rand::thread_rng().fill(seed.as_mut());
 
-    let (sk, pk) = PublicKey::key_pair_fixed(seed);
+    let (sk, pk) = PublicKey::key_pair_seed(&seed);
     let pi = PublicIdentity::new(&pk);
 
     (pk, sk, pi)

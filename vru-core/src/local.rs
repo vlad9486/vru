@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_stream::StreamExt;
 use tokio_util::codec::FramedRead;
-use vru_transport::protocol::{PublicKey, SimpleCipher};
+use vru_transport::protocol::{PublicKey, TrivialCipher};
 use super::{
     terminate,
     wire::{Message, MessageDecoder, DecoderError},
@@ -28,7 +28,7 @@ pub async fn process<F>(
     erx: mpsc::UnboundedReceiver<LocalCommand>,
     etx: F,
     stream: TcpStream,
-    cipher: SimpleCipher,
+    cipher: TrivialCipher,
     address: SocketAddr,
     peer: PublicKey,
 ) where
@@ -40,7 +40,7 @@ pub async fn process<F>(
 
     let mut stream = stream;
     let (nrx, mut ntx) = stream.split();
-    let SimpleCipher { mut send, receive } = cipher;
+    let TrivialCipher { mut send, receive } = cipher;
 
     let erx = UnboundedReceiverStream::new(erx).map(LocalIncomingEvent::Command);
     let nrx = FramedRead::new(nrx, MessageDecoder::new(receive));

@@ -107,7 +107,7 @@ fn Noise_XK_25519_AESGCM_SHA512<'a>(v: &TestVector<'a>) {
     let mut init_static_compressed = init_static.compressed.as_slice().to_vec();
     let mut payload2 = hex::decode(v.messages[2].payload).unwrap();
 
-    let cipher = SymmetricState::new(v.name)
+    let (cipher, _) = SymmetricState::new(v.name)
         .mix_hash(&hex::decode(v.prologue).unwrap())
         // <- s
         .mix_hash(&resp_static.compressed.as_ref())
