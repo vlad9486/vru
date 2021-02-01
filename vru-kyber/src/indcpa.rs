@@ -78,8 +78,11 @@ pub struct PublicKey<S, W>
 where
     S: PolySize,
     W: ArrayLength<Poly<S, typenum::B1>>,
+    W: ArrayLength<Poly<S, typenum::B0>>,
+    W: ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,
 {
     poly_vector: GenericArray<Poly<S, typenum::B1>, W>,
+    matrix: GenericArray<GenericArray<Poly<S, typenum::B0>, W>, W>,
     public_seed: GenericArray<u8, typenum::U32>,
 }
 
@@ -129,6 +132,7 @@ where
         PublicKey {
             poly_vector: pk,
             public_seed: public_seed,
+            matrix: matrix,
         },
     )
 }
@@ -150,7 +154,6 @@ where
 {
     use sha3::Shake256;
 
-    let matrix = gen_matrix::<S, W, typenum::B1>(&public_key.public_seed);
     let sp = GenericArray::generate(|i| Poly::get_noise::<Shake256, W>(noise_seed, i as u8).ntt());
 
     let ep: GenericArray<Poly<S, typenum::B1>, W> = GenericArray::generate(|i| {
@@ -159,9 +162,10 @@ where
     });
 
     let bp = GenericArray::generate(|i| {
-        let t: Poly<S, typenum::B0> = Poly::functor_2_a(&sp, &matrix[i], |a, b| {
-            Coefficient::acc(a.iter().zip(b.iter()))
-        });
+        let v: GenericArray<Poly<S, typenum::B0>, W> =
+            GenericArray::generate(|j| public_key.matrix[j][i].clone());
+        let t: Poly<S, typenum::B0> =
+            Poly::functor_2_a(&sp, &v, |a, b| Coefficient::acc(a.iter().zip(b.iter())));
         let t = t.ntt();
         Poly::functor_2(&t, &ep[i], |p, e| p + e)
     });
@@ -249,6 +253,8 @@ impl<S, W> LineValid for PublicKey<S, W>
 where
     S: PolySize,
     W: ArrayLength<Poly<S, typenum::B1>> + Mul<S::CompressedSlightly>,
+    W: ArrayLength<Poly<S, typenum::B0>>,
+    W: ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,
     <W as Mul<S::CompressedSlightly>>::Output: Add<typenum::U32>,
     <<W as Mul<S::CompressedSlightly>>::Output as Add<typenum::U32>>::Output: ArrayLength<u8>,
 {
@@ -263,9 +269,12 @@ where
         let mut seed = GenericArray::default();
         seed.clone_from_slice(&a[pos..]);
 
+        let matrix = gen_matrix::<S, W, typenum::B0>(&seed);
+
         Ok(PublicKey {
             poly_vector: GenericArray::generate(|_| it.next().unwrap()),
             public_seed: seed,
+            matrix: matrix,
         })
     }
 
@@ -287,6 +296,8 @@ impl<S, W> Line for PublicKey<S, W>
 where
     S: PolySize,
     W: ArrayLength<Poly<S, typenum::B1>>,
+    W: ArrayLength<Poly<S, typenum::B0>>,
+    W: ArrayLength<GenericArray<Poly<S, typenum::B0>, W>>,
     PublicKey<S, W>: LineValid,
 {
     fn clone_array(a: &GenericArray<u8, Self::Length>) -> Self {
