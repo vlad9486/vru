@@ -1,5 +1,5 @@
 use curve25519_dalek::edwards::EdwardsPoint;
-use vru_noise::{SymmetricState, Cipher, Rotor, ChainingKey, Key, Tag};
+use vru_noise::{SymmetricState, Cipher, Rotor, ChainingKey, Key};
 use rac::{Array, Concat, Curve, Line, LineValid, generic_array::typenum};
 
 use super::lattice::{PkLattice, PkLatticeCompressed, CipherText};
@@ -21,19 +21,20 @@ pub struct StateFinal {
 }
 
 pub type E<L> = Encrypted<Noise, L>;
+pub type U = Array<typenum::U0>;
 
 // generate: State -> StateI, Message0
 // 1136 = 1120 + 16
-pub type Message0 = Concat<PublicKeyCompressed, Tag<Noise>>;
+pub type Message0 = Concat<PublicKeyCompressed, E<U>>;
 // consume: State, Message0 -> StateI, Message1
 // 2288 = 1120 + 1152 + 16
-pub type Message1 = Concat<Concat<PublicKeyCompressed, CipherText>, Tag<Noise>>;
+pub type Message1 = Concat<Concat<PublicKeyCompressed, CipherText>, E<U>>;
 // generate: StateI, Message1 -> StateF, Message2
 // 2320 = 1120 + 16 + 1152 + 16 + 16
-pub type Message2 = Concat<Concat<E<PublicKeyCompressed>, E<CipherText>>, Tag<Noise>>;
+pub type Message2 = Concat<Concat<E<PublicKeyCompressed>, E<CipherText>>, E<U>>;
 // consume: StateI, Message2 -> StateF, Message3, PublicKey
 // 2288 = 1088 + 16 + 1152 + 16 + 16
-pub type Message3 = Concat<Concat<E<PkLatticeCompressed>, E<CipherText>>, Tag<Noise>>;
+pub type Message3 = Concat<Concat<E<PkLatticeCompressed>, E<CipherText>>, E<U>>;
 // generate: StateF, Message3 -> Cipher, Message4
 // 1184 = 1152 + 16 + 16
 pub type Message4<P> = Concat<E<CipherText>, E<P>>;
@@ -59,15 +60,14 @@ impl State {
                 let (e_sk, e_pk) = PublicKey::key_pair_seed(seed);
                 let e_pk_elliptic_c = Curve::compress(&e_pk.elliptic);
                 let e_pk_lattice_c = e_pk.lattice.compress();
-                let peer_s_pk_elliptic: EdwardsPoint = Curve::decompress(&peer_s_pi.elliptic)?;
-                let mut tag = Array::default();
+                let peer_s_pk_elliptic: EdwardsPoint =
+                    Curve::decompress(&peer_s_pi.elliptic).unwrap();
 
-                let symmetric_state = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_hash(&e_pk_elliptic_c)
                     .mix_hash(&e_pk_lattice_c)
                     .mix_shared_secret(&Curve::compress(&peer_s_pk_elliptic.exp_ec(&e_sk.elliptic)))
-                    .encrypt(&mut [])
-                    .destruct(|t| tag = t);
+                    .encrypt_line(U::default());
 
                 Ok((
                     StateEphemeral {
@@ -75,7 +75,7 @@ impl State {
                         e_sk: e_sk,
                         e_pk: e_pk,
                     },
-                    Concat(Concat(e_pk_elliptic_c, e_pk_lattice_c), tag),
+                    Concat(Concat(e_pk_elliptic_c, e_pk_lattice_c), u),
                 ))
             },
         }
@@ -87,7 +87,7 @@ impl State {
         seed: &Concat<Array<typenum::U96>, Array<typenum::U32>>,
         s_sk: &SecretKey,
     ) -> Result<(StateEphemeral, Message1), ()> {
-        let Concat(Concat(peer_e_pk_elliptic_c, peer_e_pk_lattice_c), mut tag) = message;
+        let Concat(Concat(peer_e_pk_elliptic_c, peer_e_pk_lattice_c), u) = message;
         match self {
             State { symmetric_state } => {
                 let peer_e_pk = PublicKey {
@@ -100,17 +100,17 @@ impl State {
                 let e_pk_elliptic_c = Curve::compress(&e_pk.elliptic);
                 let e_pk_lattice_c = e_pk.lattice.compress();
 
-                let symmetric_state = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_hash(&peer_e_pk_elliptic_c)
                     .mix_hash(&peer_e_pk_lattice_c)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&s_sk.elliptic)))
-                    .decrypt(&mut [], tag)?
+                    .decrypt_line::<U>(u)?;
+                let (symmetric_state, u) = symmetric_state
                     .mix_hash(&e_pk_elliptic_c)
                     .mix_hash(&e_pk_lattice_c)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&peer_e_pq.ss)
-                    .encrypt(&mut [])
-                    .destruct(|t| tag = t);
+                    .encrypt_line(u);
 
                 Ok((
                     StateEphemeral {
@@ -120,7 +120,7 @@ impl State {
                     },
                     Concat(
                         Concat(Concat(e_pk_elliptic_c, e_pk_lattice_c), peer_e_pq.ct),
-                        tag,
+                        u,
                     ),
                 ))
             },
@@ -136,8 +136,7 @@ impl StateEphemeral {
         s_sk: &SecretKey,
         s_pk: &PublicKey,
     ) -> Result<(StateFinal, Message2), ()> {
-        let Concat(Concat(Concat(peer_e_pk_elliptic_c, peer_e_pk_lattice_c), e_ct), mut tag) =
-            message;
+        let Concat(Concat(Concat(peer_e_pk_elliptic_c, peer_e_pk_lattice_c), e_ct), u) = message;
         match self {
             StateEphemeral {
                 symmetric_state,
@@ -152,26 +151,26 @@ impl StateEphemeral {
                 let peer_e_pq = peer_e_pk.lattice.encapsulate(seed);
                 let s_pk_c = Concat(Curve::compress(&s_pk.elliptic), s_pk.lattice.compress());
 
-                let (symmetric_state, encrypted_s_pk) = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_hash(&peer_e_pk_elliptic_c)
                     .mix_hash(&peer_e_pk_lattice_c)
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&e_sk.elliptic)))
                     .mix_shared_secret(&e_ss)
-                    .decrypt(&mut [], tag)?
-                    .encrypt_line(s_pk_c.clone_line());
+                    .decrypt_line::<U>(u)?;
+                let (symmetric_state, encrypted_s_pk) =
+                    symmetric_state.encrypt_line(s_pk_c.clone_line());
                 let (symmetric_state, encrypted_peer_e_ct) =
                     symmetric_state.encrypt_line(peer_e_pq.ct);
-                let symmetric_state = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_shared_secret(&Curve::compress(&peer_e_pk.elliptic.exp_ec(&s_sk.elliptic)))
                     .mix_shared_secret(&peer_e_pq.ss)
-                    .encrypt(&mut [])
-                    .destruct(|t| tag = t);
+                    .encrypt_line(u);
 
                 Ok((
                     StateFinal {
                         symmetric_state: symmetric_state,
                     },
-                    Concat(Concat(encrypted_s_pk, encrypted_peer_e_ct), tag),
+                    Concat(Concat(encrypted_s_pk, encrypted_peer_e_ct), u),
                 ))
             },
         }
@@ -183,7 +182,7 @@ impl StateEphemeral {
         seed: &Array<typenum::U32>,
         s_pk: &PublicKey,
     ) -> Result<(StateFinal, PublicKey, Message3), ()> {
-        let Concat(Concat(encrypted_peer_s_pk, encrypted_e_ct), mut tag) = message;
+        let Concat(Concat(encrypted_peer_s_pk, encrypted_e_ct), u) = message;
         match self {
             StateEphemeral {
                 symmetric_state,
@@ -197,7 +196,7 @@ impl StateEphemeral {
                 let (symmetric_state, Concat(peer_s_pk_elliptic_c, peer_s_pk_lattice_c)) =
                     symmetric_state.decrypt_line(encrypted_peer_s_pk)?;
                 let (symmetric_state, peer_e_ct) = symmetric_state.decrypt_line(encrypted_e_ct)?;
-                let (symmetric_state, encrypted_peer_s_ct) = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_shared_secret({
                         peer_s_pk = PublicKey {
                             elliptic: Curve::decompress(&peer_s_pk_elliptic_c).unwrap(),
@@ -208,21 +207,21 @@ impl StateEphemeral {
                         &Curve::compress(&peer_s_pk.elliptic.exp_ec(&e_sk.elliptic))
                     })
                     .mix_shared_secret(&e_pk.lattice.decapsulate(&e_sk.lattice, &peer_e_ct))
-                    .decrypt(&mut [], tag)?
-                    .encrypt_line(peer_s_pq.ct);
+                    .decrypt_line::<U>(u)?;
+                let (symmetric_state, encrypted_peer_s_ct) =
+                    symmetric_state.encrypt_line(peer_s_pq.ct);
                 let (symmetric_state, encrypted_s_pk_lattice) =
                     symmetric_state.encrypt_line(s_pk.lattice.compress());
-                let symmetric_state = symmetric_state
+                let (symmetric_state, u) = symmetric_state
                     .mix_shared_secret(&peer_s_ss)
-                    .encrypt(&mut [])
-                    .destruct(|t| tag = t);
+                    .encrypt_line::<U>(u);
 
                 Ok((
                     StateFinal {
                         symmetric_state: symmetric_state,
                     },
                     peer_s_pk,
-                    Concat(Concat(encrypted_s_pk_lattice, encrypted_peer_s_ct), tag),
+                    Concat(Concat(encrypted_s_pk_lattice, encrypted_peer_s_ct), u),
                 ))
             },
         }
@@ -244,7 +243,7 @@ impl StateFinal {
         P: Line,
         E<P>: Line,
     {
-        let Concat(Concat(encrypted_peer_s_pk_lattice, encrypted_s_ct), tag) = message;
+        let Concat(Concat(encrypted_peer_s_pk_lattice, encrypted_s_ct), u) = message;
         match self {
             StateFinal { symmetric_state } => {
                 let peer_s_pq;
@@ -254,9 +253,10 @@ impl StateFinal {
                     symmetric_state.decrypt_line::<CipherText>(encrypted_s_ct)?;
                 let (symmetric_state, peer_s_pk_lattice_c) = symmetric_state
                     .decrypt_line::<PkLatticeCompressed>(encrypted_peer_s_pk_lattice)?;
-                let (symmetric_state, encrypted_peer_s_ct) = symmetric_state
+                let (symmetric_state, _) = symmetric_state
                     .mix_shared_secret(&s_pk.lattice.decapsulate(&s_sk.lattice, &peer_s_ct))
-                    .decrypt(&mut [], tag)?
+                    .decrypt_line::<U>(u)?;
+                let (symmetric_state, encrypted_peer_s_ct) = symmetric_state
                     .encrypt_line::<CipherText>({
                         peer_s_pk_lattice = PkLattice::decompress(&peer_s_pk_lattice_c);
                         peer_s_pq = peer_s_pk_lattice.encapsulate(seed);
@@ -268,7 +268,7 @@ impl StateFinal {
                 let (cipher, hash) = symmetric_state.finish();
 
                 let peer_s_pk = PublicKey {
-                    elliptic: Curve::decompress(&peer_s_pi.elliptic)?,
+                    elliptic: Curve::decompress(&peer_s_pi.elliptic).unwrap(),
                     lattice: peer_s_pk_lattice,
                 };
                 if peer_s_pi.ne(&PublicIdentity::new(&peer_s_pk)) {
