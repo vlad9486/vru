@@ -1,23 +1,10 @@
-use std::{ops::Add, marker::PhantomData};
-use vru_noise::{Cipher, Unidirectional, Tag, SymmetricState, Config, Key};
+use std::ops::Add;
+use vru_noise::{SymmetricState, Config, Key};
 use rac::{
-    Array, LineValid, Line, Concat,
+    Array, Line, Concat,
     generic_array::typenum::{self, Unsigned},
 };
-
-pub type Noise = (
-    sha2::Sha256,
-    byteorder::LittleEndian,
-    chacha20poly1305::ChaCha20Poly1305,
-);
-
-type TrivialRotor = PhantomData<Noise>;
-
-pub type TrivialCipher = Cipher<Noise, TrivialRotor>;
-
-pub type TrivialUnidirectional = Unidirectional<Noise, TrivialRotor>;
-
-pub type Encrypted<C, L> = Concat<Array<<L as LineValid>::Length>, Tag<C>>;
+use super::super::Encrypted;
 
 pub trait SymmetricStateOps<C>
 where

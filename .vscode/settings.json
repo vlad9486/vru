@@ -5,6 +5,8 @@
         "chacha",
         "dalek",
         "rustfmt",
-        "typenum"
+        "typenum",
+        "Hkdf",
+        "structopt"
     ]
 }

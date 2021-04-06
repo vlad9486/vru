@@ -2,9 +2,12 @@ use curve25519_dalek::edwards::EdwardsPoint;
 use vru_noise::{SymmetricState, Cipher, Rotor, ChainingKey, Key};
 use rac::{Array, Concat, Curve, Line, LineValid, generic_array::typenum};
 
-use super::lattice::{PkLattice, PkLatticeCompressed, CipherText};
-use super::key::{SecretKey, PublicKey, PublicKeyCompressed, PublicIdentity};
-use super::ops::{Noise, Encrypted, SymmetricStateOps};
+use super::{
+    lattice::{PkLattice, PkLatticeCompressed, CipherText},
+    key::{SecretKey, PublicKey, PublicKeyCompressed, PublicIdentity},
+    ops::SymmetricStateOps,
+    super::{Noise, Encrypted},
+};
 
 pub struct State {
     symmetric_state: SymmetricState<Noise, ChainingKey<Noise>>,
@@ -318,8 +321,7 @@ mod tests {
         Array, Concat, Line,
         generic_array::{sequence::GenericSequence, typenum},
     };
-    use super::{State, PublicKey, PublicIdentity};
-    use super::super::ops::TrivialCipher;
+    use super::{State, PublicKey, PublicIdentity, super::super::TrivialCipher};
 
     #[test]
     fn handshake() {
