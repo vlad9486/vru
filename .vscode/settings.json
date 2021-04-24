@@ -1,12 +1,26 @@
 {
     "cSpell.words": [
-        "Concat",
+        "Addrs",
+        "AESGCM",
+        "BASEPOINT",
+        "bitxor",
         "byteorder",
         "chacha",
+        "ciphertext",
+        "Concat",
         "dalek",
-        "rustfmt",
-        "typenum",
         "Hkdf",
-        "structopt"
+        "Hmac",
+        "indcpa",
+        "keystream",
+        "oneshot",
+        "psks",
+        "rustfmt",
+        "schnorr",
+        "secp",
+        "structopt",
+        "tirse",
+        "typenum",
+        "varkey",
     ]
 }
