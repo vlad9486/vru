@@ -7,3 +7,6 @@ members = [
     "vru-transport",
     "vru-core",
 ]
+
+[profile.release]
+lto = true
