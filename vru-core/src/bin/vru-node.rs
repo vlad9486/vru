@@ -23,14 +23,15 @@ struct Opts {
 
 #[tokio::main]
 async fn main() {
+    let Opts { name, port } = StructOpt::from_args();
+
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    let opts = Opts::from_args();
-    tracing::info!("running, name: {}", opts.name);
+    tracing::info!("running, name: {}", name);
 
-    let db_path = format!("{}/.vru/{}", env::var("HOME").unwrap(), opts.name);
+    let db_path = format!("{}/.vru/{}", env::var("HOME").unwrap(), name);
     let db = sled::open(db_path).unwrap();
 
     let seed = if let Some(kp) = db.get(b"key_seed").unwrap() {
@@ -47,7 +48,7 @@ async fn main() {
     let pi = PublicIdentity::new(&pk);
     tracing::info!("identity: {}", pi);
 
-    let control_path = format!("{}/.vru/{}.sock", env::var("HOME").unwrap(), opts.name);
+    let control_path = format!("{}/.vru/{}.sock", env::var("HOME").unwrap(), name);
 
     let (control_tx, control_rx) = mpsc::unbounded_channel();
     let control_rx = UnboundedReceiverStream::new(control_rx);
@@ -88,6 +89,6 @@ async fn main() {
             event: LocalOutgoingEvent::ReceivedText(string),
         } => tracing::info!("received {} {:?}", peer_pi, string),
     };
-    run(sk, pk, format!("0.0.0.0:{}", opts.port), control_rx, etx).await;
+    run(sk, pk, format!("0.0.0.0:{}", port), control_rx, etx).await;
     fs::remove_file(control_path).unwrap()
 }
