@@ -1,6 +1,7 @@
-use std::env;
+#![cfg(unix)]
+
+use std::{env, io::Write as _, os::unix::net::UnixStream};
 use structopt::StructOpt;
-use tokio::{io::AsyncWriteExt, net::UnixStream};
 
 #[derive(StructOpt)]
 struct Opts {
@@ -10,11 +11,14 @@ struct Opts {
     command: String,
 }
 
-#[tokio::main]
-async fn main() {
-    let opts = Opts::from_args();
-    let control_path = format!("{}/.vru/{}.sock", env::var("HOME").unwrap(), opts.name);
+fn main() {
+    let Opts { name, command } = StructOpt::from_args();
 
-    let mut control = UnixStream::connect(control_path).await.unwrap();
-    control.write_all(opts.command.as_bytes()).await.unwrap();
+    let prefix = env::var("HOME").unwrap_or("/run".to_string());
+    let control_path = format!("{}/.vru/{}.sock", prefix, name);
+
+    UnixStream::connect(&control_path)
+        .expect(&format!("cannot connect at {}", control_path))
+        .write_fmt(format_args!("{}", command))
+        .expect(&format!("cannot write command \'{}\'", command));
 }
