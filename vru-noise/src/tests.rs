@@ -114,19 +114,15 @@ fn Noise_XK_25519_AESGCM_SHA512<'a>(v: &TestVector<'a>) {
         // -> e, es
         .mix_hash(&init_ephemeral.compressed.as_ref())
         .mix_shared_secret(&(&init_ephemeral * &resp_static))
-        .encrypt(payload0.as_mut())
-        .destruct(|tag| payload0.extend_from_slice(tag.as_ref()))
+        .encrypt_ext(&mut payload0)
         // <- e, ee
         .mix_hash(resp_ephemeral.compressed.as_ref())
         .mix_shared_secret(&(&init_ephemeral * &resp_ephemeral))
-        .encrypt(payload1.as_mut())
-        .destruct(|tag| payload1.extend_from_slice(tag.as_ref()))
+        .encrypt_ext(&mut payload1.as_mut())
         // -> s, se
-        .encrypt(init_static_compressed.as_mut())
-        .destruct(|tag| init_static_compressed.extend_from_slice(tag.as_ref()))
+        .encrypt_ext(&mut init_static_compressed)
         .mix_shared_secret(&(&init_static * &resp_ephemeral))
-        .encrypt(payload2.as_mut())
-        .destruct(|tag| payload2.extend_from_slice(tag.as_ref()))
+        .encrypt_ext(&mut payload2)
         .finish::<PhantomData<C>>();
 
     let mut ct = Vec::new();

@@ -52,26 +52,7 @@ where
     }
 }
 
-pub struct Authenticated<C, T>
-where
-    C: Config,
-{
-    tag: Tag<C>,
-    data: T,
-}
-
-impl<C, T> Authenticated<C, T>
-where
-    C: Config,
-{
-    pub fn destruct<F>(self, mut f: F) -> T
-    where
-        F: FnMut(Tag<C>),
-    {
-        f(self.tag);
-        self.data
-    }
-}
+pub type SymmetricStateNext<C, N> = SymmetricState<C, Key<C, <N as Add<typenum::U1>>::Output>>;
 
 #[derive(Clone)]
 pub struct SymmetricState<C, K>
@@ -186,10 +167,7 @@ where
     N: Unsigned + Add<typenum::U1>,
     <N as Add<typenum::U1>>::Output: Unsigned,
 {
-    pub fn encrypt(
-        self,
-        data: &mut [u8],
-    ) -> Authenticated<C, SymmetricState<C, Key<C, <N as Add<typenum::U1>>::Output>>> {
+    pub fn encrypt(self, data: &mut [u8]) -> (SymmetricStateNext<C, N>, Tag<C>) {
         let mut nonce = GenericArray::default();
         C::ByteOrder::write_u64(&mut nonce[4..], N::U64);
         let tag = self
@@ -197,20 +175,23 @@ where
             .aead
             .encrypt_in_place_detached(&nonce, &self.hash, data)
             .unwrap();
-        Authenticated {
-            tag: tag.clone(),
-            data: SymmetricState {
+        (
+            SymmetricState {
                 key: self.key.increase(),
                 hash: C::MixHash::mix_parts(self.hash, &[data, tag.as_ref()]),
             },
-        }
+            tag,
+        )
     }
 
-    pub fn decrypt(
-        self,
-        data: &mut [u8],
-        tag: Tag<C>,
-    ) -> Result<SymmetricState<C, Key<C, <N as Add<typenum::U1>>::Output>>, ()> {
+    #[cfg(feature = "std")]
+    pub fn encrypt_ext(self, data: &mut Vec<u8>) -> SymmetricStateNext<C, N> {
+        let (state, tag) = self.encrypt(data.as_mut());
+        data.extend_from_slice(&tag);
+        state
+    }
+
+    pub fn decrypt(self, data: &mut [u8], tag: Tag<C>) -> Result<SymmetricStateNext<C, N>, ()> {
         let mut nonce = GenericArray::default();
         C::ByteOrder::write_u64(&mut nonce[4..], N::U64);
         let hash = C::MixHash::mix_parts(self.hash.clone(), &[data, tag.as_ref()]);

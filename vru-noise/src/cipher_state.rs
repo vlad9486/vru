@@ -167,7 +167,7 @@ where
         use generic_array::typenum::Unsigned;
 
         let mut tag = GenericArray::default();
-        let pos = buffer.len() - <<C::Aead as AeadInPlace>::TagSize as Unsigned>::USIZE;
+        let pos = buffer.len() - <<C::Aead as AeadCore>::TagSize as Unsigned>::USIZE;
         tag.clone_from_slice(&buffer[pos..]);
         buffer.resize(pos, 0);
         self.decrypt(associated_data, buffer.as_mut(), &tag)

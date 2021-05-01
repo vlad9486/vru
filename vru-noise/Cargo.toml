@@ -47,4 +47,5 @@ version = "0.9"
 features = ["zeroize"]
 
 [features]
+default = ["std"]
 std = []

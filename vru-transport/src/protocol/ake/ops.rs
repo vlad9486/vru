@@ -1,7 +1,7 @@
 use std::ops::Add;
 use vru_noise::{SymmetricState, Config, Key};
 use rac::{
-    Array, Line, Concat,
+    Line, Concat,
     generic_array::typenum::{self, Unsigned},
 };
 use super::super::Encrypted;
@@ -37,8 +37,7 @@ where
         Encrypted<C, L>: Line,
     {
         let mut data = data.clone_line();
-        let mut tag = Array::default();
-        let state = self.encrypt(&mut data).destruct(|t| tag = t);
+        let (state, tag) = self.encrypt(&mut data);
         (state, Concat(data, tag))
     }
 

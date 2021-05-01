@@ -15,6 +15,6 @@ mod symmetric_state;
 
 pub use self::config::Config;
 pub use self::cipher_state::{Tag, Aead, ChainingKey, Rotor, Cipher, Unidirectional};
-pub use self::symmetric_state::{Key, Authenticated, SymmetricState};
+pub use self::symmetric_state::{Key, SymmetricState};
 
 pub use generic_array::typenum;
