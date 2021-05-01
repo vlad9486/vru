@@ -1,4 +1,4 @@
-use cryptography::aead::{NewAead, AeadInPlace};
+use aead::{NewAead, AeadInPlace};
 use byteorder::ByteOrder;
 use super::hash::{MixHash, HkdfSplitExt};
 

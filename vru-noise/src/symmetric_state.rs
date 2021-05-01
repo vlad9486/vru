@@ -1,4 +1,4 @@
-use cryptography::aead::{NewAead, AeadInPlace};
+use aead::{NewAead, AeadInPlace};
 use generic_array::{
     GenericArray,
     typenum::{self, Unsigned},

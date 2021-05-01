@@ -1,10 +1,10 @@
-use cryptography::aead::{NewAead, AeadInPlace};
+use aead::{NewAead, AeadInPlace, AeadCore};
 use generic_array::GenericArray;
 use byteorder::ByteOrder;
 use core::{marker::PhantomData, fmt};
 use super::{config::Config, hash::MixHash};
 
-pub type Tag<C> = GenericArray<u8, <<C as Config>::Aead as AeadInPlace>::TagSize>;
+pub type Tag<C> = GenericArray<u8, <<C as Config>::Aead as AeadCore>::TagSize>;
 pub type Aead<C> = GenericArray<u8, <<C as Config>::Aead as NewAead>::KeySize>;
 pub type ChainingKey<C> = GenericArray<u8, <<C as Config>::MixHash as MixHash>::L>;
 

@@ -1,9 +1,9 @@
 use rac::generic_array::{GenericArray, ArrayLength};
 use rac::{LineValid, Curve};
-use cryptography::{
+use {
     digest::{Update, FixedOutput},
-    mac::{Mac, NewMac},
-    cipher::{NewStreamCipher, SyncStreamCipher, SyncStreamCipherSeek},
+    crypto_mac::{Mac, NewMac},
+    cipher::{NewCipher, StreamCipher, StreamCipherSeek},
 };
 
 pub type SharedSecret<A> = GenericArray<u8, <<A as Curve>::Scalar as LineValid>::Length>;
@@ -11,7 +11,7 @@ pub type SharedSecret<A> = GenericArray<u8, <<A as Curve>::Scalar as LineValid>:
 pub trait Sphinx {
     type MacLength: ArrayLength<u8>;
     type AsymmetricKey: Curve;
-    type Stream: SyncStreamCipher + SyncStreamCipherSeek;
+    type Stream: StreamCipher + StreamCipherSeek;
 
     fn mu<'a, I>(
         shared: &SharedSecret<Self::AsymmetricKey>,
@@ -37,7 +37,7 @@ where
     A: Curve,
     C: Mac + NewMac,
     D: Default + Update + FixedOutput<OutputSize = <<A as Curve>::Scalar as LineValid>::Length>,
-    S: SyncStreamCipher + SyncStreamCipherSeek + NewStreamCipher<KeySize = C::OutputSize>,
+    S: StreamCipher + StreamCipherSeek + NewCipher<KeySize = C::OutputSize>,
 {
     type MacLength = C::OutputSize;
     type AsymmetricKey = A;
@@ -50,23 +50,23 @@ where
     where
         I: Iterator<Item = &'a [u8]>,
     {
-        let mut collector = C::new_varkey(b"mu").unwrap();
+        let mut collector = C::new_from_slice(b"mu").unwrap();
         collector.update(shared);
         let key = collector.finalize().into_bytes();
-        let mut collector = C::new_varkey(&key).unwrap();
+        let mut collector = C::new_from_slice(&key).unwrap();
         data.for_each(|s| collector.update(s));
         collector.finalize().into_bytes()
     }
 
     fn rho(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Stream {
-        let mut collector = C::new_varkey(b"rho").unwrap();
+        let mut collector = C::new_from_slice(b"rho").unwrap();
         collector.update(shared);
         let key = collector.finalize().into_bytes();
         S::new(&key, &GenericArray::default())
     }
 
     fn pi(shared: &SharedSecret<Self::AsymmetricKey>) -> Self::Stream {
-        let mut collector = C::new_varkey(b"um").unwrap();
+        let mut collector = C::new_from_slice(b"um").unwrap();
         collector.update(shared);
         let key = collector.finalize().into_bytes();
         S::new(&key, &GenericArray::default())

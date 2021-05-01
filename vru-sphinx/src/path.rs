@@ -1,5 +1,5 @@
 use rac::generic_array::{GenericArray, ArrayLength};
-use cryptography::cipher::SyncStreamCipher;
+use cipher::StreamCipher;
 
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
@@ -70,7 +70,7 @@ impl<'a, L, M, I> BitXorAssign<&'a mut I> for PayloadHmac<L, M>
 where
     L: ArrayLength<u8>,
     M: ArrayLength<u8>,
-    I: SyncStreamCipher,
+    I: StreamCipher,
 {
     fn bitxor_assign(&mut self, rhs: &'a mut I) {
         rhs.apply_keystream(self.data.as_mut_slice());
@@ -156,7 +156,7 @@ where
     L: ArrayLength<u8>,
     M: ArrayLength<u8>,
     N: ArrayLength<PayloadHmac<L, M>>,
-    I: SyncStreamCipher,
+    I: StreamCipher,
 {
     fn bitxor_assign(&mut self, rhs: &'a mut I) {
         self.as_mut().iter_mut().for_each(|x| *x ^= rhs);

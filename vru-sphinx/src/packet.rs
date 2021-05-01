@@ -1,8 +1,8 @@
 use rac::{LineValid, Curve};
 use rac::generic_array::{GenericArray, ArrayLength};
-use cryptography::{
+use {
     digest::{Update, FixedOutput},
-    cipher::{SyncStreamCipher, SyncStreamCipherSeek},
+    cipher::{StreamCipher as _, StreamCipherSeek as _},
 };
 use super::path::{PayloadHmac, Path};
 use super::sphinx::{Sphinx, SharedSecret};

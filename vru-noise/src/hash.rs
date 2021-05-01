@@ -1,4 +1,4 @@
-use cryptography::{
+use {
     digest::{Update, BlockInput, FixedOutput, Reset},
     aead::NewAead,
 };
