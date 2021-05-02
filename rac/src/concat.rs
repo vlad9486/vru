@@ -1,7 +1,9 @@
 use core::ops::Add;
 use generic_array::{ArrayLength, arr::AddLength};
+use serde::{Serialize, Deserialize};
 use crate::line::{Array, LineValid, Line};
 
+#[derive(Serialize, Deserialize)]
 pub struct Concat<U, V>(pub U, pub V)
 where
     U: LineValid,
