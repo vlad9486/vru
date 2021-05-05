@@ -4,7 +4,7 @@ use rac::{Array, LineValid, Concat, Curve, generic_array::typenum};
 use serde::{Serialize, Deserialize};
 use super::lattice::{PkLattice, SkLattice, PkLatticeCompressed};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicKey {
     pub(super) elliptic: EdwardsPoint,
     pub(super) lattice: PkLattice,

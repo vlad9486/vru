@@ -3,19 +3,19 @@
         {
             "type": "lldb",
             "request": "launch",
+            "sourceLanguages": ["rust"],
             "name": "Debug executable 'vru-node'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=vru-node",
                     "--package=vru-node"
                 ],
                 "filter": {
-                    "name": "vru-node",
+                    "name": "vru-node-udp",
                     "kind": "bin"
                 }
             },
-            "args": ["-n", "b", "-p", "8225"],
+            "args": ["--path=${env:HOME}/.vru", "--port=8224"],
             "cwd": "${workspaceFolder}"
         }    
     ]

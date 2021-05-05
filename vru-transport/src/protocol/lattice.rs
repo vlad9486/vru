@@ -7,11 +7,13 @@ use sha3::{
     Sha3_256,
     digest::{Update, FixedOutput},
 };
+use serde::{Serialize, Deserialize};
 use vru_kyber::{Kyber, Kem};
 
 // 32 * 11 * 3 + 32 = 32 * 34
 type PkLatticeL = <typenum::U32 as Mul<typenum::U34>>::Output;
 
+#[derive(Serialize, Deserialize)]
 pub struct PkLattice(Concat<Array<PkLatticeL>, Array<typenum::U32>>);
 
 impl fmt::Debug for PkLattice {
