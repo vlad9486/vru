@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 use vru_noise::{Cipher, Unidirectional, Tag};
-use rac::{
-    Array, LineValid, Concat,
-};
+use rac::{Array, LineValid, Concat};
 
 pub type Noise = (
     sha2::Sha256,

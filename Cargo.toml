@@ -6,6 +6,8 @@ members = [
     "vru-kyber",
     "vru-transport",
     "vru-core",
+    "vru-udp",
+    "vru-node",
 ]
 
 [profile.release]

@@ -240,7 +240,15 @@ impl StateFinal {
         s_pk: &PublicKey,
         s_sk: &SecretKey,
         peer_s_pi: &PublicIdentity,
-    ) -> Result<(Cipher<Noise, R>, Array<typenum::U32>, PublicKey, Message4<P>), ()>
+    ) -> Result<
+        (
+            Cipher<Noise, R>,
+            Array<typenum::U32>,
+            PublicKey,
+            Message4<P>,
+        ),
+        (),
+    >
     where
         R: Rotor<Noise>,
         P: Line,

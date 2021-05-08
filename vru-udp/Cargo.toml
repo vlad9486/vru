@@ -1,0 +1,13 @@
+[package]
+name = "vru-udp"
+version = "0.1.0"
+authors = ["Vladislav Melnik <vladislav.melnik@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+vru-transport = { path = "../vru-transport" }
+log = { version = "0.4" }
+serde = { version = "1.0" }
+popol = { version = "0.4" }
+rac = { version = "1.3" }
+rand = { version = "0.8" }
