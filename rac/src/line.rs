@@ -1,3 +1,4 @@
+use serde::{ser, de};
 use generic_array::{GenericArray, ArrayLength, typenum};
 
 pub type Array<N> = GenericArray<u8, N>;
@@ -58,5 +59,45 @@ impl LineValid for [u8; 0] {
 impl Line for [u8; 0] {
     fn clone_array(_a: &Array<Self::Length>) -> Self {
         []
+    }
+}
+
+pub struct LineLike<T>(pub T)
+where
+    T: Line;
+
+impl<T> Clone for LineLike<T>
+where
+    T: Line,
+{
+    fn clone(&self) -> Self {
+        let array = self.0.clone_line();
+        LineLike(T::clone_array(&array))
+    }
+}
+
+impl<T> ser::Serialize for LineLike<T>
+where
+    T: Line,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ser::Serializer,
+    {
+        let array = self.0.clone_line();
+        array.serialize(serializer)
+    }
+}
+
+impl<'de, T> de::Deserialize<'de> for LineLike<T>
+where
+    T: Line,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: de::Deserializer<'de>,
+    {
+        let array = de::Deserialize::deserialize(deserializer)?;
+        Ok(LineLike(T::clone_array(&array)))
     }
 }
