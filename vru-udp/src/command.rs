@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, io};
+use std::{net::SocketAddr, io, sync::mpsc};
 use serde::{Serialize, Deserialize};
 use vru_transport::protocol::{PublicIdentity, PublicKey};
 
@@ -41,4 +41,20 @@ pub enum LocalCommand {
 pub enum LocalEvent {
     ReceivedText(String),
     HandshakeDone { incoming: bool },
+}
+
+#[derive(Clone)]
+pub struct EventSender(mpsc::Sender<Event>);
+
+impl EventSender {
+    pub fn new(sender: mpsc::Sender<Event>) -> Self {
+        EventSender(sender)
+    }
+
+    pub fn report(&self, event: Event) {
+        match self.0.send(event) {
+            Ok(()) => (),
+            Err(mpsc::SendError(event)) => log::warn!("failed to send event: {:?}", event),
+        }
+    }
 }

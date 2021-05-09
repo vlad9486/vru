@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::mpsc, thread};
 use vru_transport::protocol::{PublicKey, SecretKey, xk};
 use super::{
-    command::{Event, LocalCommand},
+    command::{Event, LocalCommand, EventSender},
     DATAGRAM_SIZE,
 };
 
@@ -33,7 +33,7 @@ impl Peer {
         sk: SecretKey,
         pk: PublicKey,
         handshake_state: Option<xk::StateEphemeral>,
-        event_sender: mpsc::Sender<Event>,
+        event_sender: EventSender,
     ) -> (Self, PeerHandle) {
         let (sender, receiver) = mpsc::channel();
 
@@ -75,7 +75,7 @@ struct PeerState {
     // TODO:
     handshake_state: Option<xk::StateEphemeral>,
     receiver: mpsc::Receiver<PeerMessage>,
-    event_sender: mpsc::Sender<Event>,
+    event_sender: EventSender,
 }
 
 impl PeerState {
@@ -84,14 +84,7 @@ impl PeerState {
         let _ = (&self.sk, &self.pk, &self.handshake_state);
         while let Ok(PeerMessage::Network { address, datagram }) = self.receiver.recv() {
             let _ = datagram;
-            self.report(Event::Info(format!("process connection with: {}", address)));
-        }
-    }
-
-    fn report(&self, event: Event) {
-        match self.event_sender.send(event) {
-            Ok(()) => (),
-            Err(mpsc::SendError(event)) => log::warn!("failed to send event: {:?}", event),
+            self.event_sender.report(Event::Info(format!("process connection with: {}", address)));
         }
     }
 }

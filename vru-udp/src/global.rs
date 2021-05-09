@@ -12,7 +12,7 @@ use std::{
 use vru_transport::protocol::{SecretKey, PublicKey, PublicIdentity, xk};
 use rac::{Array, LineValid};
 use super::{
-    command::{Command, Event, Error},
+    command::{Command, Event, Error, EventSender},
     local::{Peer, PeerHandle},
     DATAGRAM_SIZE,
 };
@@ -38,7 +38,7 @@ impl NodeRef {
 
 pub struct Node {
     socket: UdpSocket,
-    sender: mpsc::Sender<Event>,
+    sender: EventSender,
     pending_outgoing: Arc<Mutex<HashMap<SocketAddr, (xk::StateEphemeral, PublicIdentity)>>>,
     pending_handles: Arc<Mutex<HashMap<PublicIdentity, PeerHandle>>>,
     handles: RefCell<HashMap<PublicIdentity, PeerHandle>>,
@@ -53,6 +53,7 @@ impl Node {
         running: Arc<AtomicBool>,
     ) -> io::Result<(Self, NodeRef)> {
         let (sender, rx) = mpsc::channel();
+        let sender = EventSender::new(sender);
 
         let socket = UdpSocket::bind::<SocketAddr>(([0, 0, 0, 0], port).into())?;
 
@@ -105,12 +106,12 @@ impl Node {
 
                 let mut h = self.pending_outgoing.lock().unwrap();
                 if h.contains_key(&address) {
-                    self.report(Event::Error(Error::ConnectionFailed(address)));
+                    self.sender.report(Event::Error(Error::ConnectionFailed(address)));
                 } else {
                     h.insert(address, (state, peer_pi));
                     drop(h);
                     if let Err(error) = self.socket.send_to(&datagram, address) {
-                        self.report(Event::Error(Error::WriteTo(address, error)));
+                        self.sender.report(Event::Error(Error::WriteTo(address, error)));
                     }
                 }
             },
@@ -131,13 +132,6 @@ impl Node {
             },
         }
     }
-
-    fn report(&self, event: Event) {
-        match self.sender.send(event) {
-            Ok(()) => (),
-            Err(mpsc::SendError(event)) => log::warn!("failed to send event: {:?}", event),
-        }
-    }
 }
 
 #[derive(Hash, Eq, PartialEq)]
@@ -147,7 +141,7 @@ struct NodeState {
     sk: SecretKey,
     pk: PublicKey,
     socket: UdpSocket,
-    sender: mpsc::Sender<Event>,
+    sender: EventSender,
     pending_outgoing: Arc<Mutex<HashMap<SocketAddr, (xk::StateEphemeral, PublicIdentity)>>>,
     pending_handles: Arc<Mutex<HashMap<PublicIdentity, PeerHandle>>>,
     connections: HashMap<LinkToken, Peer>,
@@ -172,19 +166,19 @@ impl NodeState {
                         }
                     },
                     Err(error) if error.kind() == io::ErrorKind::Interrupted => return,
-                    Err(error) => self.report(Event::Error(Error::ReadSocket(error))),
+                    Err(error) => self.sender.report(Event::Error(Error::ReadSocket(error))),
                 }
             }
             let mut datagram = [0; DATAGRAM_SIZE];
             match self.socket.recv_from(datagram.as_mut()) {
                 Ok((length, address)) => {
                     if length != DATAGRAM_SIZE {
-                        self.report(Event::Error(Error::FrameSize(address, length)));
+                        self.sender.report(Event::Error(Error::FrameSize(address, length)));
                     } else {
                         self.process(address, datagram);
                     }
                 },
-                Err(error) => self.report(Event::Error(Error::ReadSocket(error))),
+                Err(error) => self.sender.report(Event::Error(Error::ReadSocket(error))),
             }
         }
 
@@ -211,15 +205,8 @@ impl NodeState {
                 let mut h = self.pending_handles.lock().unwrap();
                 h.insert(peer_pi, peer_handle);
             } else {
-                self.report(Event::Info(format!("incoming from: {}", address)));
+                self.sender.report(Event::Info(format!("incoming from: {}", address)));
             }
-        }
-    }
-
-    fn report(&self, event: Event) {
-        match self.sender.send(event) {
-            Ok(()) => (),
-            Err(mpsc::SendError(event)) => log::warn!("failed to send event: {:?}", event),
         }
     }
 }
