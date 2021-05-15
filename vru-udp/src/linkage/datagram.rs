@@ -1,4 +1,7 @@
-use rand::{distributions::{Distribution, Standard}, Rng};
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 
 pub struct Datagram([u8; Self::SIZE]);
 

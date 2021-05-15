@@ -83,7 +83,7 @@ where
 {
     pub fn wrap(inner: PolyInner<S>) -> Self {
         Poly {
-            inner: inner,
+            inner,
             phantom_data: PhantomData,
         }
     }

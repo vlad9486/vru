@@ -15,7 +15,7 @@ where
     S: PolySize,
 {
     fn from_coefficients(c: GenericArray<Coefficient, S::C>) -> Self {
-        PolyInner { c: c }
+        PolyInner { c }
     }
 
     pub fn compress_slightly(&self) -> GenericArray<u8, S::CompressedSlightly> {

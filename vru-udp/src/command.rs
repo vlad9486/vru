@@ -18,7 +18,7 @@ pub enum Command {
 pub enum Event {
     Error(Error),
     Local {
-        source: PublicKey,
+        source: Box<PublicKey>,
         local: LocalEvent,
     },
     Info(String),

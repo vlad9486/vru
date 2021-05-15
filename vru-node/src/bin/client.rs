@@ -12,14 +12,8 @@ pub struct Args {
 
 #[derive(StructOpt)]
 pub enum Cmd {
-    Connect {
-        peer: Identity,
-        address: SocketAddr,
-    },
-    SendText {
-        peer: Identity,
-        text: String,
-    },
+    Connect { peer: Identity, address: SocketAddr },
+    SendText { peer: Identity, text: String },
 }
 
 fn main() {
@@ -39,6 +33,8 @@ fn main() {
     };
 
     let path = path.join("ctrl.sock");
-    let ctrl = UnixStream::connect(&path).expect(&format!("cannot connect to: {:?}", &path));
-    bincode::serialize_into(ctrl, &command).expect(&format!("cannot send command to: {:?}", path));
+    let ctrl = UnixStream::connect(&path)
+        .unwrap_or_else(|error| panic!("cannot connect to: {:?}, error: {:?}", path, error));
+    bincode::serialize_into(ctrl, &command)
+        .unwrap_or_else(|error| panic!("cannot send command to: {:?}, error: {:?}", path, error));
 }

@@ -84,7 +84,8 @@ impl PeerState {
         let _ = (&self.sk, &self.pk, &self.handshake_state);
         while let Ok(PeerMessage::Network { address, datagram }) = self.receiver.recv() {
             let _ = datagram;
-            self.event_sender.report(Event::Info(format!("process connection with: {}", address)));
+            self.event_sender
+                .report(Event::Info(format!("process connection with: {}", address)));
         }
     }
 }

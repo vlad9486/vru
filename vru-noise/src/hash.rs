@@ -89,14 +89,12 @@ where
         let mut okm: GenericArray<u8, <Self::L as Mul<N>>::Output> = GenericArray::default();
         hkdf.expand(&[], okm.as_mut()).unwrap();
         let l = <Self::L as Unsigned>::USIZE;
-        let o = GenericArray::generate(|i| {
+        GenericArray::generate(|i| {
             let mut s = GenericArray::default();
             s.as_mut_slice()
                 .clone_from_slice(&okm[(l * i)..(l * (i + 1))]);
             s
-        });
-
-        o
+        })
     }
 }
 
@@ -151,8 +149,11 @@ where
         data: &[u8],
     ) -> (GenericArray<u8, A::KeySize>, GenericArray<u8, A::KeySize>) {
         let keys = Self::hkdf_split(Some(chaining_key), data);
-        let [_0, _1]: [_; 2] = keys.into();
-        (truncate::<A>(_0.as_ref()), truncate::<A>(_1.as_ref()))
+        let [send_key, receive_key]: [_; 2] = keys.into();
+        (
+            truncate::<A>(send_key.as_ref()),
+            truncate::<A>(receive_key.as_ref()),
+        )
     }
 
     fn split_2(

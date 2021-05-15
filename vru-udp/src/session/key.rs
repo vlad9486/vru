@@ -44,7 +44,11 @@ impl PublicKey {
         let lattice = Pk::clone_array(&lattice_bytes);
         let elliptic = EdwardsPoint::try_clone_array(&elliptic_bytes).unwrap();
         let lattice_hash = lattice::pk_hash(&lattice);
-        PublicKey { elliptic, lattice, lattice_hash }
+        PublicKey {
+            elliptic,
+            lattice,
+            lattice_hash,
+        }
     }
 
     pub fn elliptic(&self) -> Array<typenum::U32> {
@@ -57,7 +61,7 @@ impl PublicKey {
     }
 
     pub fn lattice_hash(&self) -> Array<typenum::U32> {
-        self.lattice_hash.clone()
+        self.lattice_hash
     }
 
     pub fn compress(&self) -> PublicKeyBytes {
@@ -77,7 +81,10 @@ impl PublicKey {
     }
 
     pub fn identity(&self) -> Identity {
-        use sha3::{Sha3_256, digest::{Digest, FixedOutput}};
+        use sha3::{
+            Sha3_256,
+            digest::{Digest, FixedOutput},
+        };
 
         let bytes = self.compress().clone_line();
         let hash = Sha3_256::default().chain(&bytes).finalize_fixed();
@@ -113,9 +120,7 @@ impl FromStr for Identity {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes = base64::decode(s)?;
         let mut hash = Array::default();
-        hash
-            .as_mut_slice()
-            .clone_from_slice(&bytes[1..33]);
+        hash.as_mut_slice().clone_from_slice(&bytes[1..33]);
         Ok(Identity { hash })
     }
 }
@@ -137,11 +142,11 @@ mod implementations {
         {
             let a = self.elliptic.clone_line();
             let b = self.lattice.clone_line();
-            let c = self.lattice_hash.clone();
+            let c = self.lattice_hash;
             LineLike(Concat(a, Concat(b, c))).serialize(serializer)
         }
     }
-    
+
     impl<'de> de::Deserialize<'de> for PublicKey {
         fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
         where
@@ -155,31 +160,33 @@ mod implementations {
             })
         }
     }
-    
+
     impl Clone for PublicKey {
         fn clone(&self) -> Self {
             PublicKey {
                 elliptic: LineValid::try_clone_array(&self.elliptic.clone_line()).unwrap(),
                 lattice: Line::clone_array(&self.lattice.clone_line()),
-                lattice_hash: self.lattice_hash.clone(),
+                lattice_hash: self.lattice_hash,
             }
         }
     }
-    
+
     impl Clone for SecretKey {
         fn clone(&self) -> Self {
             let sk_bytes = self.lattice.clone_line();
             SecretKey {
-                elliptic: self.elliptic.clone(),
+                elliptic: self.elliptic,
                 lattice: Line::clone_array(&sk_bytes),
             }
         }
     }
-
 }
 
 mod lattice {
-    use sha3::{Sha3_256, digest::{Digest, FixedOutput}};
+    use sha3::{
+        Sha3_256,
+        digest::{Digest, FixedOutput},
+    };
     use rac::{Array, LineValid, generic_array::typenum};
     use vru_kyber::{Kyber, Kem};
 

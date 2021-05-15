@@ -60,7 +60,7 @@ where
                 }
             }
 
-            Poly::wrap(PolyInner { c: c })
+            Poly::wrap(PolyInner { c })
         })
     })
 }
@@ -131,8 +131,8 @@ where
         SecretKey { poly_vector: sk },
         PublicKey {
             poly_vector: pk,
-            public_seed: public_seed,
-            matrix: matrix,
+            public_seed,
+            matrix,
         },
     )
 }
@@ -274,7 +274,7 @@ where
         Ok(PublicKey {
             poly_vector: GenericArray::generate(|_| it.next().unwrap()),
             public_seed: seed,
-            matrix: matrix,
+            matrix,
         })
     }
 

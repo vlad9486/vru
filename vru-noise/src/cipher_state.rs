@@ -35,6 +35,18 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct MacMismatch;
+
+impl fmt::Display for MacMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "mac mismatch")
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for MacMismatch {}
+
 #[derive(Clone)]
 pub struct Unidirectional<C, R>
 where
@@ -83,7 +95,7 @@ where
         associated_data: &[u8],
         buffer: &mut [u8],
         tag: &Tag<C>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), MacMismatch> {
         let mut nonce_array = GenericArray::default();
         C::ByteOrder::write_u64(&mut nonce_array[4..], self.nonce);
         self.key
@@ -91,7 +103,7 @@ where
             .map(|()| {
                 self.next();
             })
-            .map_err(|_| ())
+            .map_err(|_| MacMismatch)
     }
 }
 
@@ -152,7 +164,7 @@ where
         associated_data: &[u8],
         buffer: &mut [u8],
         tag: &Tag<C>,
-    ) -> Result<(), ()> {
+    ) -> Result<(), MacMismatch> {
         self.receive.decrypt(associated_data, buffer, tag)
     }
 
@@ -163,7 +175,11 @@ where
     }
 
     #[cfg(feature = "std")]
-    pub fn decrypt_ext(&mut self, associated_data: &[u8], buffer: &mut Vec<u8>) -> Result<(), ()> {
+    pub fn decrypt_ext(
+        &mut self,
+        associated_data: &[u8],
+        buffer: &mut Vec<u8>,
+    ) -> Result<(), MacMismatch> {
         use generic_array::typenum::Unsigned;
 
         let mut tag = GenericArray::default();

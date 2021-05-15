@@ -1,5 +1,8 @@
 #![no_std]
 #![forbid(unsafe_code)]
+#![allow(clippy::many_single_char_names)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::identity_op)]
 
 #[cfg(test)]
 #[macro_use]

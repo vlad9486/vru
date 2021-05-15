@@ -109,8 +109,7 @@ where
 mod tests {
     use std::{prelude::v1::Vec, marker::PhantomData};
     use rac::{
-        LineValid,
-        Concat,
+        LineValid, Concat,
         generic_array::{
             GenericArray,
             typenum::{self, Unsigned},
@@ -164,7 +163,7 @@ mod tests {
 
         fn secret_key_bytes(
             &self,
-        ) -> GenericArray<u8, <Concat<<Kyber<W> as Kem>::SecretKey, <Kyber<W> as Kem>::PublicKey> as LineValid>::Length> {
+        ) -> GenericArray<u8, <Concat<<Kyber<W> as Kem>::SecretKey, <Kyber<W> as Kem>::PublicKey> as LineValid>::Length>{
             GenericArray::from_slice(hex::decode(self.secret_key).unwrap().as_ref()).clone()
         }
 

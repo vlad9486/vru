@@ -8,6 +8,7 @@
         "byteorder",
         "chacha",
         "ciphertext",
+        "clippy",
         "Concat",
         "dalek",
         "datagram",
@@ -24,6 +25,7 @@
         "structopt",
         "subcommand",
         "tirse",
+        "thiserror",
         "typenum",
         "varkey",
     ]

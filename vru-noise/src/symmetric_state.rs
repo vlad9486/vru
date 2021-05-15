@@ -8,7 +8,7 @@ use core::{fmt, marker::PhantomData, ops::Add};
 use super::{
     config::Config,
     hash::{MixHash, HkdfSplitExt},
-    cipher_state::{ChainingKey, Tag, Cipher, Rotor},
+    cipher_state::{MacMismatch, ChainingKey, Tag, Cipher, Rotor},
 };
 
 pub struct Key<C, N>
@@ -21,13 +21,13 @@ where
     nonce: PhantomData<N>,
 }
 
-impl<C, N> Into<ChainingKey<C>> for Key<C, N>
+impl<C, N> From<Key<C, N>> for ChainingKey<C>
 where
     C: Config,
     N: Unsigned,
 {
-    fn into(self) -> ChainingKey<C> {
-        self.chaining_key
+    fn from(v: Key<C, N>) -> Self {
+        v.chaining_key
     }
 }
 
@@ -38,16 +38,13 @@ where
     <N as Add<typenum::U1>>::Output: Unsigned,
 {
     fn increase(self) -> Key<C, <N as Add<typenum::U1>>::Output> {
-        match self {
-            Key {
-                chaining_key: chaining_key,
-                aead: aead,
-                nonce: _,
-            } => Key {
-                chaining_key: chaining_key,
-                aead: aead,
-                nonce: PhantomData,
-            },
+        let Key {
+            chaining_key, aead, ..
+        } = self;
+        Key {
+            chaining_key,
+            aead,
+            nonce: PhantomData,
         }
     }
 }
@@ -80,7 +77,7 @@ where
 
         SymmetricState {
             key: hash.clone(),
-            hash: hash,
+            hash,
         }
     }
 }
@@ -94,15 +91,9 @@ where
     }
 
     pub fn mix_hash(self, data: &[u8]) -> Self {
-        match self {
-            SymmetricState {
-                key: key,
-                hash: hash,
-            } => SymmetricState {
-                key: key,
-                hash: C::MixHash::mix_hash(hash, data),
-            },
-        }
+        let SymmetricState { key, hash } = self;
+        let hash = C::MixHash::mix_hash(hash, data);
+        SymmetricState { key, hash }
     }
 }
 
@@ -112,43 +103,32 @@ where
     K: Into<ChainingKey<C>>,
 {
     pub fn mix_shared_secret(self, data: &[u8]) -> SymmetricState<C, Key<C, typenum::U0>> {
-        match self {
-            SymmetricState {
-                key: key,
-                hash: hash,
-            } => {
-                let c = key.into();
-                let (c, a) = C::HkdfSplit::split_2(c.as_ref(), data);
-                SymmetricState {
-                    key: Key {
-                        chaining_key: c,
-                        aead: C::Aead::new(&a),
-                        nonce: PhantomData,
-                    },
-                    hash: hash,
-                }
-            },
-        }
+        let SymmetricState { key, hash } = self;
+
+        let chaining_key = key.into();
+        let (chaining_key, aead) = C::HkdfSplit::split_2(chaining_key.as_ref(), data);
+        let aead = C::Aead::new(&aead);
+        let key = Key {
+            chaining_key,
+            aead,
+            nonce: PhantomData,
+        };
+        SymmetricState { key, hash }
     }
 
     pub fn mix_psk(self, data: &[u8]) -> SymmetricState<C, Key<C, typenum::U0>> {
-        match self {
-            SymmetricState {
-                key: key,
-                hash: hash,
-            } => {
-                let c = key.into();
-                let (c, m, a) = C::HkdfSplit::split_3(c.as_ref(), data);
-                SymmetricState {
-                    key: Key {
-                        chaining_key: c,
-                        aead: C::Aead::new(&a),
-                        nonce: PhantomData,
-                    },
-                    hash: C::MixHash::mix_hash(hash, m.as_ref()),
-                }
-            },
-        }
+        let SymmetricState { key, hash } = self;
+
+        let chaining_key = key.into();
+        let (chaining_key, middle, aead) = C::HkdfSplit::split_3(chaining_key.as_ref(), data);
+        let aead = C::Aead::new(&aead);
+        let key = Key {
+            chaining_key,
+            aead,
+            nonce: PhantomData,
+        };
+        let hash = C::MixHash::mix_hash(hash, middle.as_ref());
+        SymmetricState { key, hash }
     }
 
     pub fn finish<R>(self) -> (Cipher<C, R>, GenericArray<u8, <C::MixHash as MixHash>::L>)
@@ -156,8 +136,8 @@ where
         R: Rotor<C>,
     {
         let c = self.key.into();
-        let (_0, _1) = C::HkdfSplit::split_final(c.as_ref(), &[]);
-        (Cipher::new(c, _0, _1), self.hash)
+        let (send_key, receive_key) = C::HkdfSplit::split_final(c.as_ref(), &[]);
+        (Cipher::new(c, send_key, receive_key), self.hash)
     }
 }
 
@@ -191,7 +171,11 @@ where
         state
     }
 
-    pub fn decrypt(self, data: &mut [u8], tag: Tag<C>) -> Result<SymmetricStateNext<C, N>, ()> {
+    pub fn decrypt(
+        self,
+        data: &mut [u8],
+        tag: Tag<C>,
+    ) -> Result<SymmetricStateNext<C, N>, MacMismatch> {
         let mut nonce = GenericArray::default();
         C::ByteOrder::write_u64(&mut nonce[4..], N::U64);
         let hash = C::MixHash::mix_parts(self.hash.clone(), &[data, tag.as_ref()]);
@@ -200,9 +184,9 @@ where
             .decrypt_in_place_detached(&nonce, &self.hash, data, &tag)
             .map(|()| SymmetricState {
                 key: self.key.increase(),
-                hash: hash,
+                hash,
             })
-            .map_err(|_| ())
+            .map_err(|_| MacMismatch)
     }
 }
 

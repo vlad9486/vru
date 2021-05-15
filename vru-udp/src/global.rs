@@ -9,6 +9,7 @@ use std::{
     },
     thread,
 };
+use thiserror::Error;
 use super::{
     command::{Command, Event, Error, EventSender},
     local::{Peer, PeerHandle},
@@ -18,7 +19,8 @@ use super::{
 
 pub struct NodeRef(mpsc::Receiver<Event>);
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
+#[error("node disconnected")]
 pub struct NodeDisconnected;
 
 impl NodeRef {
@@ -94,7 +96,8 @@ impl Node {
             Command::Connect { address, peer_pi } => {
                 let mut h = self.pending_outgoing.lock().unwrap();
                 if h.contains_key(&address) {
-                    self.sender.report(Event::Error(Error::ConnectionFailed(address)));
+                    self.sender
+                        .report(Event::Error(Error::ConnectionFailed(address)));
                 } else {
                     h.insert(address, peer_pi);
                 }
@@ -154,7 +157,8 @@ impl NodeState {
             match self.socket.recv_from(datagram.as_mut()) {
                 Ok((length, address)) => {
                     if length != Datagram::SIZE {
-                        self.sender.report(Event::Error(Error::FrameSize(address, length)));
+                        self.sender
+                            .report(Event::Error(Error::FrameSize(address, length)));
                     } else {
                         self.process(address, datagram);
                     }
@@ -185,7 +189,8 @@ impl NodeState {
                 datagram.as_mut()[..1120].clone_from_slice(&message.0.clone_line());
                 rand::Rng::fill(&mut rand::thread_rng(), datagram.as_mut()[1120..].as_mut());
                 if let Err(error) = self.socket.send_to(datagram.as_ref(), address) {
-                    self.sender.report(Event::Error(Error::WriteTo(address, error)));
+                    self.sender
+                        .report(Event::Error(Error::WriteTo(address, error)));
                 }
 
                 let (sk, pk) = (self.sk.clone(), self.pk.clone());
@@ -197,7 +202,8 @@ impl NodeState {
                 let mut h = self.pending_handles.lock().unwrap();
                 h.insert(peer_pi, peer_handle);
             } else {
-                self.sender.report(Event::Info(format!("incoming from: {}", address)));
+                self.sender
+                    .report(Event::Info(format!("incoming from: {}", address)));
             }
         }
     }

@@ -1,4 +1,7 @@
-use rac::{Array, Concat, Line, LineValid, generic_array::{typenum, sequence::GenericSequence}};
+use rac::{
+    Array, Concat, Line, LineValid,
+    generic_array::{typenum, sequence::GenericSequence},
+};
 use super::{PublicKey, xx, TrivialRotor};
 
 #[test]
@@ -23,10 +26,36 @@ fn handshake() {
     let payload_s = orig_s.clone();
 
     let (i_state, message) = xx::out0(&i_e_seed, &r_pi);
-    let (r_state, message) = xx::take0_out1(&Concat(r_e_seed, r_pq_e_seed), &r_pi, &r_pk, &r_sk, message, payload_p);
-    let (i_state, rr_pk, payload_p, message) =xx::take1_out2::<Array<typenum::U16>, _, _>(&Concat(i_pq_e_seed, i_pq_s_seed), i_state, &i_pk, &i_sk, message, payload_q, payload_r).ok().unwrap();
-    let (mut r_cipher, r_hash, ri_pk, payload_q, payload_r, message) = xx::take2_out3::<Array<typenum::U16>, Array<typenum::U16>, _, TrivialRotor>(&r_pq_s_seed, r_state, &r_pk, &r_sk, message, payload_s).ok().unwrap();
-    let (mut i_cipher, i_hash, payload_s) = xx::take_3::<Array<typenum::U16>, TrivialRotor>(i_state, &i_pk, &i_sk, message).ok().unwrap();
+    let (r_state, message) = xx::take0_out1(
+        &Concat(r_e_seed, r_pq_e_seed),
+        &r_pi,
+        &r_pk,
+        &r_sk,
+        message,
+        payload_p,
+    );
+    let (i_state, rr_pk, payload_p, message) = xx::take1_out2::<Array<typenum::U16>, _, _>(
+        &Concat(i_pq_e_seed, i_pq_s_seed),
+        i_state,
+        &i_pk,
+        &i_sk,
+        message,
+        payload_q,
+        payload_r,
+    )
+    .unwrap();
+    let (mut r_cipher, r_hash, ri_pk, payload_q, payload_r, message) =
+        xx::take2_out3::<Array<typenum::U16>, Array<typenum::U16>, _, TrivialRotor>(
+            &r_pq_s_seed,
+            r_state,
+            &r_pk,
+            &r_sk,
+            message,
+            payload_s,
+        )
+        .unwrap();
+    let (mut i_cipher, i_hash, payload_s) =
+        xx::take_3::<Array<typenum::U16>, TrivialRotor>(i_state, &i_pk, &i_sk, message).unwrap();
 
     let reference_hash = "77316870c248ff7f6cb6ad95b473e46290f6945a97888892ae83dbe23fa7abe4";
     assert_eq!(reference_hash, hex::encode(&i_hash));

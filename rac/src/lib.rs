@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![no_std]
 #![allow(non_shorthand_field_patterns)]
+#![allow(clippy::all)]
 
 pub extern crate generic_array;
 

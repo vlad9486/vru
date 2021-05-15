@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![allow(clippy::type_complexity)]
 
 mod command;
 pub use self::command::{Command, LocalCommand, Event, Error, LocalEvent};

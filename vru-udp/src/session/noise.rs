@@ -1,6 +1,9 @@
 use std::{marker::PhantomData, ops::Add};
-use vru_noise::{Cipher, Unidirectional, Tag, Config, SymmetricState, Key};
-use rac::{Array, LineValid, Line, Concat, generic_array::typenum::{self, Unsigned}};
+use vru_noise::{MacMismatch, Cipher, Unidirectional, Tag, Config, SymmetricState, Key};
+use rac::{
+    Array, LineValid, Line, Concat,
+    generic_array::typenum::{self, Unsigned},
+};
 
 pub type Noise = (
     sha3::Sha3_256,
@@ -29,7 +32,10 @@ where
         L: Line,
         Encrypted<C, L>: Line;
 
-    fn decrypt_line<L>(self, encrypted: Encrypted<C, L>) -> Result<(Self::NextState, L), ()>
+    fn decrypt_line<L>(
+        self,
+        encrypted: Encrypted<C, L>,
+    ) -> Result<(Self::NextState, L), MacMismatch>
     where
         L: Line,
         Encrypted<C, L>: Line;
@@ -53,7 +59,10 @@ where
         (state, Concat(data, tag))
     }
 
-    fn decrypt_line<L>(self, encrypted: Encrypted<C, L>) -> Result<(Self::NextState, L), ()>
+    fn decrypt_line<L>(
+        self,
+        encrypted: Encrypted<C, L>,
+    ) -> Result<(Self::NextState, L), MacMismatch>
     where
         L: Line,
         Encrypted<C, L>: Line,
