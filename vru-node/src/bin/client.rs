@@ -1,6 +1,6 @@
 use std::{path::PathBuf, net::SocketAddr};
 use structopt::StructOpt;
-use vru_transport::protocol::PublicIdentity;
+use vru_udp::Identity;
 
 #[derive(StructOpt)]
 pub struct Args {
@@ -13,11 +13,11 @@ pub struct Args {
 #[derive(StructOpt)]
 pub enum Cmd {
     Connect {
-        peer: PublicIdentity,
+        peer: Identity,
         address: SocketAddr,
     },
     SendText {
-        peer: PublicIdentity,
+        peer: Identity,
         text: String,
     },
 }

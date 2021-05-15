@@ -69,7 +69,7 @@ impl PkLattice {
         let hash = Sha3_256::default().chain(&pk_bytes).finalize_fixed();
 
         (
-            SkLattice(sk.0.clone_line()),
+            SkLattice(sk.clone_line()),
             PkLattice(Concat(pk_bytes, hash)),
         )
     }
@@ -85,7 +85,6 @@ impl PkLattice {
 
     pub fn decapsulate(&self, sk: &SkLattice, ct: &CipherText) -> SharedSecret {
         let pk = Line::clone_array(&self.0 .0);
-        let sk = Concat(Line::clone_array(&sk.0), pk);
-        <Kyber<typenum::U3> as Kem>::decapsulate(&sk, &self.0 .1, &Line::clone_array(&ct))
+        <Kyber<typenum::U3> as Kem>::decapsulate(&Line::clone_array(&sk.0), &pk, &self.0 .1, &Line::clone_array(&ct))
     }
 }

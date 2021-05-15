@@ -1,14 +1,14 @@
 use std::{net::SocketAddr, sync::mpsc, thread};
-use vru_transport::protocol::{PublicKey, SecretKey, xk};
 use super::{
     command::{Event, LocalCommand, EventSender},
-    DATAGRAM_SIZE,
+    session::{PublicKey, SecretKey, xx},
+    linkage::Datagram,
 };
 
 enum PeerMessage {
     Network {
         address: SocketAddr,
-        datagram: [u8; DATAGRAM_SIZE],
+        datagram: Datagram,
     },
     Command(LocalCommand),
 }
@@ -19,7 +19,7 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn send(&self, address: SocketAddr, datagram: [u8; DATAGRAM_SIZE]) {
+    pub fn send(&self, address: SocketAddr, datagram: Datagram) {
         self.sender
             .send(PeerMessage::Network { address, datagram })
             .unwrap()
@@ -32,7 +32,7 @@ impl Peer {
     pub fn spawn(
         sk: SecretKey,
         pk: PublicKey,
-        handshake_state: Option<xk::StateEphemeral>,
+        handshake_state: Option<xx::InitiatorsEphemeral>,
         event_sender: EventSender,
     ) -> (Self, PeerHandle) {
         let (sender, receiver) = mpsc::channel();
@@ -73,7 +73,7 @@ struct PeerState {
     sk: SecretKey,
     pk: PublicKey,
     // TODO:
-    handshake_state: Option<xk::StateEphemeral>,
+    handshake_state: Option<xx::InitiatorsEphemeral>,
     receiver: mpsc::Receiver<PeerMessage>,
     event_sender: EventSender,
 }

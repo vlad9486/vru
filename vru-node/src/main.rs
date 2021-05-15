@@ -26,7 +26,6 @@ fn main() {
         },
     };
     use rand::Rng;
-    use vru_transport::protocol::PublicIdentity;
     use vru_udp::Node;
 
     let Args { path, port } = Args::from_args();
@@ -50,14 +49,14 @@ fn main() {
         },
     };
 
-    let (sk, pk) = match db.key_or_insert(|s| rand::thread_rng().fill(s.as_mut())) {
+    let (pk, sk) = match db.key_or_insert(|s| rand::thread_rng().fill(s.as_mut())) {
         Ok(v) => v,
         Err(error) => {
             tracing::error!("fatal error: failed to obtain key, error: {}", error);
             return;
         },
     };
-    let pi = PublicIdentity::new(&pk);
+    let pi = pk.identity();
     tracing::info!("identity: {}", pi);
 
     let running = Arc::new(AtomicBool::new(true));

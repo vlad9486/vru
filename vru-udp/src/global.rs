@@ -9,12 +9,11 @@ use std::{
     },
     thread,
 };
-use vru_transport::protocol::{SecretKey, PublicKey, PublicIdentity, xk};
-use rac::{Array, LineValid};
 use super::{
     command::{Command, Event, Error, EventSender},
     local::{Peer, PeerHandle},
-    DATAGRAM_SIZE,
+    session::{SecretKey, PublicKey, Identity, xx},
+    linkage::{Datagram, LinkToken},
 };
 
 pub struct NodeRef(mpsc::Receiver<Event>);
@@ -37,11 +36,10 @@ impl NodeRef {
 }
 
 pub struct Node {
-    socket: UdpSocket,
     sender: EventSender,
-    pending_outgoing: Arc<Mutex<HashMap<SocketAddr, (xk::StateEphemeral, PublicIdentity)>>>,
-    pending_handles: Arc<Mutex<HashMap<PublicIdentity, PeerHandle>>>,
-    handles: RefCell<HashMap<PublicIdentity, PeerHandle>>,
+    pending_outgoing: Arc<Mutex<HashMap<SocketAddr, Identity>>>,
+    pending_handles: Arc<Mutex<HashMap<Identity, PeerHandle>>>,
+    handles: RefCell<HashMap<Identity, PeerHandle>>,
     main_thread: thread::JoinHandle<()>,
 }
 
@@ -55,13 +53,11 @@ impl Node {
         let (sender, rx) = mpsc::channel();
         let sender = EventSender::new(sender);
 
-        let socket = UdpSocket::bind::<SocketAddr>(([0, 0, 0, 0], port).into())?;
-
         let pending_outgoing = Arc::new(Mutex::new(HashMap::new()));
         let pending_handles = Arc::new(Mutex::new(HashMap::new()));
         let handles = RefCell::new(HashMap::new());
         let main_thread = {
-            let socket = socket.try_clone()?;
+            let socket = UdpSocket::bind::<SocketAddr>(([0, 0, 0, 0], port).into())?;
             let listener = NodeState {
                 sk,
                 pk,
@@ -79,7 +75,6 @@ impl Node {
 
         Ok((
             Node {
-                socket,
                 sender,
                 pending_outgoing,
                 pending_handles,
@@ -97,22 +92,11 @@ impl Node {
     pub fn command(&self, command: Command) {
         match command {
             Command::Connect { address, peer_pi } => {
-                let mut seed = Array::default();
-                rand::Rng::fill(&mut rand::thread_rng(), seed.as_mut());
-                let mut datagram = [0; DATAGRAM_SIZE];
-                let (state, message) = xk::State::new(&peer_pi).generate(&seed, &peer_pi).unwrap();
-                datagram[..1120].clone_from_slice(&message.0.clone_line());
-                rand::Rng::fill(&mut rand::thread_rng(), datagram[1120..].as_mut());
-
                 let mut h = self.pending_outgoing.lock().unwrap();
                 if h.contains_key(&address) {
                     self.sender.report(Event::Error(Error::ConnectionFailed(address)));
                 } else {
-                    h.insert(address, (state, peer_pi));
-                    drop(h);
-                    if let Err(error) = self.socket.send_to(&datagram, address) {
-                        self.sender.report(Event::Error(Error::WriteTo(address, error)));
-                    }
+                    h.insert(address, peer_pi);
                 }
             },
             Command::Local {
@@ -134,16 +118,13 @@ impl Node {
     }
 }
 
-#[derive(Hash, Eq, PartialEq)]
-struct LinkToken([u8; 16]);
-
 struct NodeState {
     sk: SecretKey,
     pk: PublicKey,
     socket: UdpSocket,
     sender: EventSender,
-    pending_outgoing: Arc<Mutex<HashMap<SocketAddr, (xk::StateEphemeral, PublicIdentity)>>>,
-    pending_handles: Arc<Mutex<HashMap<PublicIdentity, PeerHandle>>>,
+    pending_outgoing: Arc<Mutex<HashMap<SocketAddr, Identity>>>,
+    pending_handles: Arc<Mutex<HashMap<Identity, PeerHandle>>>,
     connections: HashMap<LinkToken, Peer>,
 }
 
@@ -169,10 +150,10 @@ impl NodeState {
                     Err(error) => self.sender.report(Event::Error(Error::ReadSocket(error))),
                 }
             }
-            let mut datagram = [0; DATAGRAM_SIZE];
+            let mut datagram = Datagram::default();
             match self.socket.recv_from(datagram.as_mut()) {
                 Ok((length, address)) => {
-                    if length != DATAGRAM_SIZE {
+                    if length != Datagram::SIZE {
                         self.sender.report(Event::Error(Error::FrameSize(address, length)));
                     } else {
                         self.process(address, datagram);
@@ -187,21 +168,32 @@ impl NodeState {
         }
     }
 
-    fn process(&mut self, address: SocketAddr, datagram: [u8; DATAGRAM_SIZE]) {
-        let mut link_token = LinkToken([0; 16]);
-        link_token.0.clone_from_slice(&datagram[..16]);
+    fn process(&mut self, address: SocketAddr, datagram: Datagram) {
+        let link_token = datagram.link();
         if let Some(ctx) = self.connections.get(&link_token) {
             ctx.send(address, datagram);
         } else {
             let mut h = self.pending_outgoing.lock().unwrap();
-            if let Some((state, peer_pi)) = h.remove(&address) {
+            if let Some(peer_pi) = h.remove(&address) {
                 drop(h);
+
+                use rac::{Array, LineValid};
+                let mut seed = Array::default();
+                rand::Rng::fill(&mut rand::thread_rng(), seed.as_mut());
+                let mut datagram = Datagram::default();
+                let (state, message) = xx::out0(&seed, &peer_pi);
+                datagram.as_mut()[..1120].clone_from_slice(&message.0.clone_line());
+                rand::Rng::fill(&mut rand::thread_rng(), datagram.as_mut()[1120..].as_mut());
+                if let Err(error) = self.socket.send_to(datagram.as_ref(), address) {
+                    self.sender.report(Event::Error(Error::WriteTo(address, error)));
+                }
+
                 let (sk, pk) = (self.sk.clone(), self.pk.clone());
                 let sender = self.sender.clone();
                 let (peer, peer_handle) = Peer::spawn(sk, pk, Some(state), sender);
                 peer.send(address, datagram);
-                let link_token = LinkToken([0; 16]); // TODO:
-                self.connections.insert(link_token, peer);
+                // TODO:
+                self.connections.insert(rand::random(), peer);
                 let mut h = self.pending_handles.lock().unwrap();
                 h.insert(peer_pi, peer_handle);
             } else {

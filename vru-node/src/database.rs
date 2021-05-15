@@ -1,7 +1,7 @@
 use std::path::Path;
 use sled::Db;
 use rac::{Array, generic_array::typenum};
-use vru_transport::protocol::{SecretKey, PublicKey};
+use vru_udp::{SecretKey, PublicKey};
 
 pub struct Database {
     db: Db,
@@ -17,7 +17,7 @@ impl Database {
         })
     }
 
-    pub fn key_or_insert<F>(&self, randomize: F) -> sled::Result<(SecretKey, PublicKey)>
+    pub fn key_or_insert<F>(&self, randomize: F) -> sled::Result<(PublicKey, SecretKey)>
     where
         F: FnOnce(&mut Array<typenum::U96>),
     {
@@ -28,6 +28,6 @@ impl Database {
             randomize(&mut s);
             self.db.insert(b"key_seed", s.as_ref())?;
         }
-        Ok(PublicKey::key_pair_seed(&s))
+        Ok(PublicKey::gen(&s))
     }
 }

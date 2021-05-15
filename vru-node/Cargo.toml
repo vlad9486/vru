@@ -13,7 +13,6 @@ name = "vru-udp"
 path = "src/bin/client.rs"
 
 [dependencies]
-vru-transport = { path = "../vru-transport" }
 vru-udp = { path = "../vru-udp" }
 rac = { version = "1.3" }
 rand = { version = "0.8" }

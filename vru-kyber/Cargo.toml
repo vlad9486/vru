@@ -9,7 +9,7 @@ rac = { version = "1.3" }
 digest = { version = "0.9" }
 rand = { version = "0.8" }
 sha3 = { version = "0.9" }
-pq-kem = { version = "0.4" }
+pq-kem = { version = "0.5" }
 subtle = { version = "2.4" }
 
 [dev-dependencies]

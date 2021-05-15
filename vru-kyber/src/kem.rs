@@ -19,7 +19,6 @@ use super::{
 pub type S = typenum::U32;
 
 pub type SkReject<W> = Concat<SecretKey<S, W>, GenericArray<u8, typenum::U32>>;
-pub type SkFull<W> = Concat<SkReject<W>, PublicKey<S, W>>;
 
 pub struct Kyber<W>(PhantomData<W>);
 
@@ -36,10 +35,9 @@ where
     PublicKey<S, W>: LineValid,
     CipherText<S, W>: LineValid,
     SkReject<W>: LineValid,
-    SkFull<W>: LineValid,
 {
     type PublicKey = PublicKey<S, W>;
-    type SecretKey = SkFull<W>;
+    type SecretKey = SkReject<W>;
     type CipherText = CipherText<S, W>;
     type PairSeedLength = typenum::U64;
     type PublicKeyHashLength = typenum::U32;
@@ -51,7 +49,7 @@ where
     ) -> (Self::PublicKey, Self::SecretKey) {
         let Concat(seed, reject) = C::clone_array(seed);
         let (sk, pk) = key_pair(&seed);
-        (pk.clone(), Concat(Concat(sk, reject), pk))
+        (pk, Concat(sk, reject))
     }
 
     fn encapsulate(
@@ -77,11 +75,12 @@ where
 
     fn decapsulate(
         secret_key: &Self::SecretKey,
+        public_key: &Self::PublicKey,
         public_key_hash: &GenericArray<u8, Self::PublicKeyHashLength>,
         cipher_text: &Self::CipherText,
     ) -> GenericArray<u8, Self::SharedSecretLength> {
-        let Concat(Concat(ref sk, reject), pk) = secret_key;
-        let pk_bytes = pk.clone_line();
+        let Concat(ref sk, reject) = secret_key;
+        let pk_bytes = public_key.clone_line();
         let pk = PublicKey::try_clone_array(&pk_bytes).unwrap();
 
         let message = decapsulate(cipher_text, sk);
@@ -111,6 +110,7 @@ mod tests {
     use std::{prelude::v1::Vec, marker::PhantomData};
     use rac::{
         LineValid,
+        Concat,
         generic_array::{
             GenericArray,
             typenum::{self, Unsigned},
@@ -141,6 +141,7 @@ mod tests {
     where
         W: Unsigned,
         Kyber<W>: Kem,
+        Concat<<Kyber<W> as Kem>::SecretKey, <Kyber<W> as Kem>::PublicKey>: LineValid,
     {
         fn from_json() -> Self {
             let json_text = include_str!("test_vectors.json");
@@ -163,7 +164,7 @@ mod tests {
 
         fn secret_key_bytes(
             &self,
-        ) -> GenericArray<u8, <<Kyber<W> as Kem>::SecretKey as LineValid>::Length> {
+        ) -> GenericArray<u8, <Concat<<Kyber<W> as Kem>::SecretKey, <Kyber<W> as Kem>::PublicKey> as LineValid>::Length> {
             GenericArray::from_slice(hex::decode(self.secret_key).unwrap().as_ref()).clone()
         }
 
@@ -194,12 +195,15 @@ mod tests {
     where
         W: Unsigned,
         Kyber<W>: Kem<PublicKeyHashLength = <Sha3_256 as FixedOutput>::OutputSize>,
+        Concat<<Kyber<W> as Kem>::SecretKey, <Kyber<W> as Kem>::PublicKey>: LineValid,
     {
         let v = TestVector::from_json();
 
         let (pk, sk) = Kyber::<W>::generate_pair(&v.seed());
         let pk_bytes = pk.clone_line();
-        assert_eq!(sk.clone_line(), v.secret_key_bytes());
+        let sk_full = Concat(sk, pk);
+        assert_eq!(sk_full.clone_line(), v.secret_key_bytes());
+        let Concat(sk, _) = sk_full;
         assert_eq!(pk_bytes, v.public_key_bytes());
         let pk = LineValid::try_clone_array(&pk_bytes).unwrap();
         let hash = Sha3_256::default().chain(pk_bytes).finalize_fixed();
@@ -207,7 +211,7 @@ mod tests {
         let ct_bytes = ct.clone_line();
         assert_eq!(ct_bytes, v.cipher_text_bytes());
         let ct = LineValid::try_clone_array(&ct_bytes).unwrap();
-        let ss_1 = Kyber::<W>::decapsulate(&sk, &hash, &ct);
+        let ss_1 = Kyber::<W>::decapsulate(&sk, &pk, &hash, &ct);
         assert_eq!(ss_0, v.shared_secret());
         assert_eq!(ss_0, ss_1);
     }

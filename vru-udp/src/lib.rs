@@ -8,4 +8,10 @@ pub use self::global::{Node, NodeRef, NodeDisconnected};
 
 mod local;
 
-const DATAGRAM_SIZE: usize = 1280;
+mod linkage;
+
+mod session;
+pub use self::session::{PublicKey, SecretKey, Identity};
+
+// TODO: use it
+pub use self::session::{xx, TrivialCipher, TrivialUnidirectional};

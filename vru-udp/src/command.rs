@@ -1,15 +1,15 @@
 use std::{net::SocketAddr, io, sync::mpsc};
 use serde::{Serialize, Deserialize};
-use vru_transport::protocol::{PublicIdentity, PublicKey};
+use super::session::{Identity, PublicKey};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Command {
     Connect {
-        peer_pi: PublicIdentity,
+        peer_pi: Identity,
         address: SocketAddr,
     },
     Local {
-        destination: PublicIdentity,
+        destination: Identity,
         command: LocalCommand,
     },
 }
