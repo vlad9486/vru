@@ -2,9 +2,7 @@
 members = [
     "rac",
     "vru-noise",
-    #"vru-sphinx",
     "vru-kyber",
-    #"vru-transport",
     #"vru-core",
     "vru-udp",
     "vru-node",
