@@ -3,7 +3,6 @@ members = [
     "rac",
     "vru-noise",
     "vru-kyber",
-    #"vru-core",
     "vru-udp",
     "vru-node",
 ]
