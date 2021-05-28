@@ -10,10 +10,10 @@ use std::{
     thread,
 };
 use thiserror::Error;
+use vru_session::handshake::{SecretKey, PublicKey, Identity, xx};
 use super::{
     command::{Command, Event, Error, EventSender},
     local::{Peer, PeerHandle},
-    session::{SecretKey, PublicKey, Identity, xx},
     linkage::{Datagram, LinkToken},
 };
 

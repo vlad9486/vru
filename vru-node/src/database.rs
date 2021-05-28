@@ -1,7 +1,7 @@
 use std::path::Path;
 use sled::Db;
 use rac::{Array, generic_array::typenum};
-use vru_udp::{SecretKey, PublicKey};
+use vru_session::handshake::{SecretKey, PublicKey};
 
 pub struct Database {
     db: Db,

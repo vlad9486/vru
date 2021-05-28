@@ -1,6 +1,6 @@
 use std::{path::PathBuf, net::SocketAddr};
 use structopt::StructOpt;
-use vru_udp::Identity;
+use vru_session::handshake::Identity;
 
 #[derive(StructOpt)]
 pub struct Args {

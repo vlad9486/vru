@@ -222,8 +222,8 @@ where
     (
         RespondersEphemeral {
             symmetric_state,
-            e_sk,
             e_pk,
+            e_sk,
         },
         (Concat(peer_e_pq.ct, payload_p), e_pkc, enc_s_pkc),
     )

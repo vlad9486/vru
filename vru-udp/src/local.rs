@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, sync::mpsc, thread};
+use vru_session::handshake::{PublicKey, SecretKey, xx};
 use super::{
     command::{Event, LocalCommand, EventSender},
-    session::{PublicKey, SecretKey, xx},
     linkage::Datagram,
 };
 

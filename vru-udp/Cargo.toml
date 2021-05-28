@@ -12,11 +12,4 @@ rand = { version = "0.8" }
 thiserror = { version = "1.0" }
 
 rac = { version = "1.3", features = ["curve25519-dalek"] }
-vru-noise = { path = "../vru-noise" }
-vru-kyber = { path = "../vru-kyber" }
-base64 = { version = "0.13" }
-curve25519-dalek = { version = "3.1", features = ["serde"] }
-chacha20poly1305 = { version = "0.8" }
-sha3 = { version = "0.9" }
-byteorder = { version = "1.4" }
-hex = { version = "0.4" }
+vru-session = { path = "../vru-session" }

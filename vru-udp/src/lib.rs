@@ -10,9 +10,3 @@ pub use self::global::{Node, NodeRef, NodeDisconnected};
 mod local;
 
 mod linkage;
-
-mod session;
-pub use self::session::{PublicKey, SecretKey, Identity};
-
-// TODO: use it
-pub use self::session::{xx, TrivialCipher, TrivialUnidirectional};

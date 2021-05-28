@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, io, sync::mpsc};
 use serde::{Serialize, Deserialize};
-use super::session::{Identity, PublicKey};
+use vru_session::handshake::{Identity, PublicKey};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Command {
