@@ -18,7 +18,7 @@ pub enum Cmd {
 
 fn main() {
     use std::os::unix::net::UnixStream;
-    use vru_udp::{Command, LocalCommand};
+    use vru_session::Command;
 
     let Args { path, cmd } = StructOpt::from_args();
     let command = match cmd {
@@ -28,7 +28,7 @@ fn main() {
         },
         Cmd::SendText { peer, text } => Command::Local {
             destination: peer,
-            command: LocalCommand::SendText(text),
+            command: text.into_bytes(),
         },
     };
 

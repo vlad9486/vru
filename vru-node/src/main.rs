@@ -26,7 +26,8 @@ fn main() {
         },
     };
     use rand::Rng;
-    use vru_udp::Node;
+    use vru_session::{Node as _, NodeRef as _};
+    use vru_tcp::Node;
 
     let Args { path, port } = Args::from_args();
 
@@ -68,7 +69,8 @@ fn main() {
         }
     }
 
-    let (node, node_ref) = match Node::spawn(sk, pk, port, running.clone()) {
+    let address = ([0, 0, 0, 0], port).into();
+    let (node, node_ref) = match Node::spawn(sk, pk, address, (), running.clone()) {
         Ok(v) => v,
         Err(error) => {
             tracing::error!("fatal error: failed to create a node, error: {}", error);

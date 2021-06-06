@@ -5,6 +5,8 @@ members = [
     "vru-kyber",
     "vru-session",
     "vru-udp",
+    "vru-tcp",
+    "vru-processor",
     "vru-node",
 ]
 
